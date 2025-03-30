@@ -11,12 +11,10 @@ from typing import List
 from omnimcp.omniparser.server import Deploy
 from omnimcp.config import config
 
-# Import from the new location inside the package
 
-
-# --- Helper Function ---
 def get_running_parser_instances() -> List[dict]:
     """Get any running OmniParser instances."""
+    # (Implementation remains the same as provided)
     ec2 = boto3.resource("ec2", region_name=config.AWS_REGION)
     instances = list(
         ec2.instances.filter(
@@ -41,155 +39,161 @@ def get_running_parser_instances() -> List[dict]:
                         }
                     )
             except requests.exceptions.RequestException:
-                pass  # Ignore instances that don't respond to probe
+                pass
     return running_instances
 
 
-# --- Helper Function ---
 def cleanup_parser_instances():
     """Stop all running parser instances."""
-    print("\nAttempting cleanup via Deploy.stop()...")
-    try:
-        Deploy.stop()
-        print("Deploy.stop() executed.")
-    except Exception as e:
-        print(f"Error during Deploy.stop(): {e}")
+    Deploy.stop()
 
 
-# --- Fixture ---
-# TODO: Fix fixture import/scoping issue (AttributeError previously)
-# For now, tests needing this image will load it directly or use another fixture.
 # @pytest.fixture(scope="module")
 # def test_image():
 #     """Generate synthetic test image."""
-#     # This call caused AttributeError during collection previously
-#     img, _ = generate_test_ui()
+#     img, _ = synthetic_ui_helpers.generate_test_ui()
 #     return img
 
 
-# --- Test Class ---
-@pytest.mark.e2e  # Mark this whole class as end-to-end
+@pytest.mark.e2e
 class TestParserDeployment:
     """Test suite for OmniParser deployment scenarios."""
 
     @classmethod
     def setup_class(cls):
         """Initial setup for all tests."""
-        # Cleanup before starting tests for this class
-        print("\n--- TestParserDeployment Setup ---")
-        print("Cleaning up any potentially running instances before tests...")
-        cleanup_parser_instances()
-        # Wait after cleanup to ensure resources are gone before tests start needing them
-        print("Waiting after pre-test cleanup...")
-        time.sleep(30)
         cls.initial_instances = get_running_parser_instances()
-        print(f"Initial running instances before tests: {len(cls.initial_instances)}")
+        print(f"\nInitial running instances: {len(cls.initial_instances)}")
+        # Ensure cleanup happens before tests if needed, or rely on teardown
+        # cleanup_parser_instances()
 
     @classmethod
     def teardown_class(cls):
-        """Cleanup after all tests in this class."""
-        print("\n--- TestParserDeployment Teardown ---")
+        """Cleanup after all tests."""
+        print("\nCleaning up parser instances after tests...")
         cleanup_parser_instances()
-        print("Waiting after post-test cleanup...")
+        # Short wait to allow termination to progress slightly before final check
         time.sleep(10)
         final_instances = get_running_parser_instances()
+        # Allow for some flexibility if initial instances were present
         print(f"Final running instances after cleanup: {len(final_instances)}")
-        # Asserting exactly 0 might fail if other non-test instances exist
-        # Focus on whether instances created *by the tests* were removed.
-        # This teardown ensures cleanup runs even if tests fail.
-
-    # TODO: Fix test imports/logic (previously failed collection) - Commented out for now
-    # @pytest.mark.skipif(False, reason="Temporarily enable, ensure cleanup runs first")
-    # def test_auto_deployment(self, test_image): # Requires test_image fixture to work
-    #     """Test client auto-deploys when no instance exists."""
-    #     print("\nTesting auto-deployment...")
-    #     running_instances = get_running_parser_instances()
-    #     assert len(running_instances) == 0, "Test requires no running instances at start"
-    #
-    #     print("Initializing client to trigger auto-deployment...")
-    #     deployment_start = time.time()
-    #     client = None
-    #     try:
-    #          client = OmniParserClient(server_url=None, auto_deploy=True)
-    #     except Exception as e:
-    #          pytest.fail(f"OmniParserClient initialization failed during auto-deploy: {e}")
-    #     deployment_time = time.time() - deployment_start
-    #     print(f"Client initialization (inc. deployment) took {deployment_time:.1f} seconds")
-    #
-    #     running_instances = get_running_parser_instances()
-    #     assert len(running_instances) >= 1, f"Expected >=1 running instance, found {len(running_instances)}"
-    #     assert client and client.server_url is not None, "Client failed to get server URL"
-    #
-    #     print(f"Parsing image using deployed server: {client.server_url}")
-    #     result = client.parse_image(test_image) # Use the fixture
-    #     assert result is not None, "Parse result None"
-    #     assert "error" not in result, f"Parsing failed: {result.get('error')}"
-    #     assert "parsed_content_list" in result, "Result missing parsed content"
-
-    # TODO: Fix test imports/logic (previously failed collection) - Commented out for now
-    # def test_use_existing_deployment(self, test_image): # Requires test_image fixture
-    #     """Test client uses existing deployment if available."""
-    #     print("\nTesting use of existing deployment...")
-    #     running_instances = get_running_parser_instances()
-    #     if not running_instances:
-    #         print("No running instance found, deploying one...")
-    #         ip, id = Deploy.start()
-    #         assert ip and id, "Deploy.start() failed to return IP/ID"
-    #         print("Waiting 60s for server to stabilize after deployment...") # Longer wait
-    #         time.sleep(60)
-    #         running_instances = get_running_parser_instances()
-    #
-    #     assert running_instances, "Test requires at least one running instance"
-    #
-    #     initial_instance = running_instances[0]
-    #     initial_url = initial_instance['url']
-    #     print(f"Using existing instance: {initial_url}")
-    #
-    #     # Instantiate client WITH the existing URL, disable auto_deploy
-    #     client = OmniParserClient(server_url=initial_url, auto_deploy=False)
-    #     start_time = time.time()
-    #     result = client.parse_image(test_image) # Use fixture
-    #     operation_time = time.time() - start_time
-    #
-    #     current_instances = get_running_parser_instances()
-    #     assert len(current_instances) == len(running_instances), "Instance count changed"
-    #     assert result is not None, "Parse result None"
-    #     assert "error" not in result, f"Parsing failed: {result.get('error')}"
-    #     assert "parsed_content_list" in result, "Result missing parsed content"
-    #     print(f"Parse operation with existing deployment took {operation_time:.1f} seconds")
-
-    # TODO: Fix test imports/logic (previously failed collection) - Commented out for now
-    # def test_deployment_idempotency(self, test_image): # Requires test_image fixture
-    #     """Test multiple Deploy.start calls don't create duplicate running instances."""
-    #     print("\nTesting deployment idempotency...")
-    #     initial_instances = get_running_parser_instances()
-    #     if not initial_instances:
-    #          print("No initial instance, running Deploy.start() once...")
-    #          Deploy.start()
-    #          time.sleep(60) # Wait
-    #          initial_instances = get_running_parser_instances()
-    #          assert initial_instances, "Failed to start initial instance"
-    #     initial_count = len(initial_instances)
-    #     print(f"Initial running instance count: {initial_count}")
-    #
-    #     for i in range(2): # Attempt start twice more
-    #         print(f"Deployment attempt {i + 1}")
-    #         ip, id = Deploy.start() # Should find existing running instance
-    #         assert ip and id, f"Deploy.start() failed on attempt {i+1}"
-    #         time.sleep(5)
-    #         current_instances = get_running_parser_instances()
-    #         print(f"Instance count after attempt {i + 1}: {len(current_instances)}")
-    #         assert len(current_instances) == initial_count, "Idempotency failed: instance count changed"
-    #
-    #     # Verify client works
-    #     final_instances = get_running_parser_instances()
-    #     assert final_instances, "No instances running after idempotency test"
-    #     client = OmniParserClient(server_url=final_instances[0]["url"], auto_deploy=False)
-    #     result = client.parse_image(test_image) # Use fixture
-    #     assert result is not None, "Parse operation failed after idempotency checks"
-    #     assert "error" not in result, f"Parsing failed: {result.get('error')}"
+        # assert len(final_instances) == 0, "Cleanup did not terminate all instances"
+        # Asserting <= initial might be safer if tests run against pre-existing envs
+        assert len(final_instances) <= len(cls.initial_instances), "Cleanup failed"
 
 
-# Keep if needed for running file directly, though usually rely on `pytest` command
-# if __name__ == "__main__":
-#     pytest.main([__file__, "-v", "--run-e2e"])
+#     @pytest.mark.skipif(
+#         # This skip logic might be less reliable now, consider removing or adjusting
+#         # condition=lambda: len(get_running_parser_instances()) > 0,
+#         False, # Let's try running it, client init should handle existing instances
+#         reason="Skip logic needs review, test client's ability to find existing"
+#     )
+#     def test_auto_deployment(self, test_image):
+#         """Test client auto-deploys when no instance exists."""
+#         # Ensure no instances are running before this specific test
+#         print("\nEnsuring no instances are running before auto-deploy test...")
+#         cleanup_parser_instances()
+#         time.sleep(15) # Wait longer after stop
+#         running_instances = get_running_parser_instances()
+#         assert len(running_instances) == 0, "Test requires no running instances at start"
+#
+#         # Instantiate client - should trigger auto-deployment
+#         print("Initializing client to trigger auto-deployment...")
+#         deployment_start = time.time()
+#         try:
+#              # Init client with auto_deploy=True (default) and no URL
+#              client = OmniParserClient(server_url=None, auto_deploy=True)
+#         except Exception as e:
+#              pytest.fail(f"OmniParserClient initialization failed during auto-deploy: {e}")
+#
+#         deployment_time = time.time() - deployment_start
+#         print(f"Client initialization (inc. deployment) took {deployment_time:.1f} seconds")
+#
+#         # Verify deployment happened (at least one instance should be running now)
+#         running_instances = get_running_parser_instances()
+#         assert len(running_instances) >= 1, \
+#             f"Expected at least 1 running instance after auto-deploy, found {len(running_instances)}"
+#
+#         # Verify parsing works via the client instance
+#         assert client.server_url is not None, "Client did not get a server URL after deployment"
+#         print(f"Parsing image using deployed server: {client.server_url}")
+#         result = client.parse_image(test_image)
+#
+#         assert result is not None, "Parse result should not be None"
+#         assert "error" not in result, f"Parsing failed: {result.get('error')}"
+#         assert "parsed_content_list" in result, "Result missing parsed content"
+#
+#     def test_use_existing_deployment(self, test_image):
+#         """Test client uses existing deployment if available."""
+#         print("\nTesting client use of existing deployment...")
+#         running_instances = get_running_parser_instances()
+#         if not running_instances:
+#             # Deploy if needed for this test specifically
+#             print("No running instance found, deploying one for test...")
+#             Deploy.start()
+#             # Wait needed for server to be fully ready after Deploy.start returns
+#             print("Waiting for deployed server to be ready...")
+#             time.sleep(60) # Add a wait, adjust as needed
+#             running_instances = get_running_parser_instances()
+#
+#         assert len(running_instances) > 0, \
+#             "Test requires at least one running instance (deployment failed?)"
+#
+#         initial_instance = running_instances[0]
+#         initial_url = initial_instance['url']
+#         print(f"Using existing instance: {initial_url}")
+#
+#         # Instantiate client WITH the existing URL
+#         client = OmniParserClient(server_url=initial_url, auto_deploy=False) # Disable auto_deploy
+#
+#         # Use client with existing deployment
+#         start_time = time.time()
+#         result = client.parse_image(test_image) # Use the client method
+#         operation_time = time.time() - start_time
+#
+#         # Verify no *new* instances were created
+#         current_instances = get_running_parser_instances()
+#         assert len(current_instances) == len(running_instances), \
+#             "Number of running instances changed unexpectedly"
+#
+#         # Verify result
+#         assert result is not None, "Parse result should not be None"
+#         assert "error" not in result, f"Parsing failed: {result.get('error')}"
+#         assert "parsed_content_list" in result, "Result missing parsed content"
+#         print(f"Parse operation with existing deployment took {operation_time:.1f} seconds")
+#
+#     def test_deployment_idempotency(self, test_image):
+#         """Test that multiple deployment attempts don't create duplicate instances."""
+#         print("\nTesting deployment idempotency...")
+#         # Ensure at least one instance exists initially
+#         initial_instances = get_running_parser_instances()
+#         if not initial_instances:
+#              print("No initial instance, running Deploy.start() once...")
+#              Deploy.start()
+#              time.sleep(60) # Wait
+#              initial_instances = get_running_parser_instances()
+#              assert initial_instances, "Failed to start initial instance for idempotency test"
+#         initial_count = len(initial_instances)
+#         print(f"Initial instance count: {initial_count}")
+#
+#         # Attempt multiple deployments via Deploy.start()
+#         for i in range(2): # Run start twice more
+#             print(f"Deployment attempt {i + 1}")
+#             # Deploy.start() should find the existing running instance and not create more
+#             ip, id = Deploy.start()
+#             assert ip is not None, f"Deploy.start() failed on attempt {i+1}"
+#             time.sleep(5) # Short pause
+#
+#             current_instances = get_running_parser_instances()
+#             print(f"Instance count after attempt {i + 1}: {len(current_instances)}")
+#             # Should ideally be exactly initial_count, but allow for delays/transients
+#             assert len(current_instances) == initial_count, \
+#                 f"Unexpected number of instances: {len(current_instances)} (expected {initial_count})"
+#
+#         # Verify client works with the final deployment state
+#         final_instances = get_running_parser_instances()
+#         assert final_instances, "No instances running after idempotency test"
+#         client = OmniParserClient(server_url=final_instances[0]["url"], auto_deploy=False)
+#         result = client.parse_image(test_image)
+#         assert result is not None, "Parse operation failed after idempotency checks"
+#         assert "error" not in result, f"Parsing failed: {result.get('error')}"

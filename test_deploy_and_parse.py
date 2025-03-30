@@ -1,5 +1,4 @@
 # test_deploy_and_parse.py
-
 """
 A simple script to test OmniParser deployment and basic image parsing.
 Reuses config loading from omnimcp.config.

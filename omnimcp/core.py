@@ -1,110 +1,147 @@
 # omnimcp/core.py
-from typing import List, Tuple, Optional
-
+from typing import List, Tuple, Optional  # Added Dict, Any
 import platform
 
-# Assuming these imports are correct
-from .types import UIElement
+# Import necessary types
+from .types import (
+    UIElement,
+    ElementTrack,  # Added
+    LLMActionPlan,  # Still needed for temporary return value
+    LLMAnalysisAndDecision,  # Added
+)
 from .utils import (
     render_prompt,
     logger,
-)  # Assuming render_prompt handles template creation
+)
 from .completions import call_llm_api
-from .types import LLMActionPlan
+from .config import config  # Import config if needed, e.g., for model name
 
 
+# --- Updated Prompt Template ---
 PROMPT_TEMPLATE = """
-You are an expert UI automation assistant. Your task is to determine the single next best action to take on a user interface (UI) to achieve a given user goal, and assess if the goal is already complete.
+You are an expert UI automation assistant. Your task is to analyze the current UI state, including changes from the previous step, and then decide the single best next action to achieve a given goal.
 
 **Operating System:** {{ platform }}
 
 **User Goal:**
 {{ user_goal }}
 
-**Previous Actions Taken:**
+**Previous Actions Taken (up to last 5):**
 {% if action_history %}
-{% for action_desc in action_history %}
+{% for action_desc in action_history[-5:] %} {# Show only recent history #}
 - {{ action_desc }}
 {% endfor %}
 {% else %}
 - None
 {% endif %}
 
-**Current UI Elements:**
-Here is a list of UI elements currently visible on the screen (showing first 50 if many).
-
+**Current UI Elements (Raw Detections - Max 50):**
 ```
-{% for element in elements %}
-{{ element.to_prompt_repr() }}
+{% for element in elements[:50] %}
+{{ element.to_prompt_repr() }} {# Uses per-frame ID #}
 {% endfor %}
 ```
 
+**Tracked Elements Context (Persistent View - Max 50):**
+This shows elements being tracked across frames. Status 'VISIBLE' means seen this frame. 'MISSING(n)' means missed for n consecutive frames.
+```
+{% if tracking_info %}
+{% for track in tracking_info[:50] %}
+- {{ track.short_repr() }} {# Uses persistent TrackID and status #}
+{% endfor %}
+{% else %}
+- (No tracking info available or first frame)
+{% endif %}
+```
+
 **Instructions:**
-1.  **Analyze:** Review the user goal, previous actions, and the current UI elements. Check if the goal is already achieved based on the current state.
-2.  **Reason:** If the goal is not complete, explain your step-by-step plan.
-3.  **App Launch Sequence Logic:**
-    * If the goal requires an application (like 'calculator') that is *not* visible, and the previous action was *not* pressing the OS search key ("Cmd+Space" or "Win"), then the next action is to press the OS search key: `action: "press_key"`, `key_info: "Cmd+Space"` (or "Win" depending on OS).
-    * **IMPORTANT:** If the previous action *was* pressing the OS search key, AND a search input field is now visible in the **Current UI Elements**, then the next action is to type the application name: `action: "type"`, `text_to_type: "Calculator"` (or the specific app name needed), `element_id: <ID of search input field, if available, otherwise null>`.
-    * If the previous action was typing the application name into search, the next action is to press Enter: `action: "press_key"`, `key_info: "Enter"`.
-4.  **General Action Selection & Output Format Rules:**
-    * Identify the most relevant visible UI element for the next logical step based on your reasoning.
-    * **Rule 1:** If `action` is 'click', `element_id` MUST be the integer ID of a visible element from the list. `text_to_type` and `key_info` MUST be null.
-    * **Rule 2:** If `action` is 'type', `text_to_type` MUST be the string to type. `key_info` MUST be null. `element_id` SHOULD be the ID of the target field if identifiable, otherwise null (if typing into a general area like Spotlight).
-    * **Rule 3:** If `action` is 'press_key', `key_info` MUST be the key/shortcut string (e.g., 'Enter', 'Cmd+Space', 'a', '*'). `element_id` and `text_to_type` MUST be null.
-    * **Rule 4:** If `action` is 'scroll', provide scroll details if possible (or default to generic scroll). `element_id`, `text_to_type`, `key_info` MUST be null.
-    * **Rule 5:** If the desired element for the next logical step (e.g., the '*' button) is **not found** in the 'Current UI Elements', DO NOT choose `action: "click"` with `element_id: null`. Instead, consider if an alternative valid action like `action: "press_key"` (e.g., with `key_info: "*"`) can achieve the result. If no suitable action exists, explain this in the reasoning and select an action like waiting or reporting failure if appropriate (though the current actions don't support waiting/failure reporting well).
-    * **Rule 6:** Ensure your entire output is ONLY the single, valid JSON object conforming to the structure, with no extra text or markdown.
-5.  **Goal Completion:** If the goal is fully achieved, set `is_goal_complete: true`. Otherwise, set `is_goal_complete: false`.
-6.  **Output Format:** Respond ONLY with a valid JSON object matching the structure below. Do NOT include ```json markdown.
+
+1.  **Analyze State:** Carefully review the Goal, History, Raw Elements, and especially the Tracked Elements Context. Reason about what changed since the last step (newly appeared elements? previously visible elements now missing? critical elements still present?). Consider if missing elements are temporary (e.g., due to UI transition) or permanent. Note any critical elements needed for the goal and their current status.
+2.  **Decide Action:** Based on your analysis, determine the single best action to take next towards the goal. This could be interacting with a visible element, handling a missing element (e.g., waiting, using a keyboard shortcut if applicable), or finishing if the goal is complete.
+3.  **Output Format:** Respond ONLY with a single valid JSON object containing two keys: "screen_analysis" and "action_decision".
+    * The value for "screen_analysis" MUST be a JSON object conforming to the `ScreenAnalysis` structure below.
+    * The value for "action_decision" MUST be a JSON object conforming to the `ActionDecision` structure below.
+    * Do NOT include any text outside this main JSON object (e.g., no ```json markdown).
+
+**JSON Output Structure:**
 
 ```json
 {
-  "reasoning": "Your step-by-step thinking process here...",
-  "action": "click | type | scroll | press_key",
-  "element_id": <ID of target element, or null>,
-  "text_to_type": "<text to enter if action is type, otherwise null>",
-  "key_info": "<key or shortcut if action is press_key, otherwise null>",
-  "is_goal_complete": true | false
+  "screen_analysis": {
+    "reasoning": "Your detailed step-by-step analysis of the current state, changes from the previous state using tracking context, and assessment relevant to the goal.",
+    "disappeared_elements": ["list", "of", "track_ids", "considered", "permanently", "gone"],
+    "temporarily_missing_elements": ["list", "of", "track_ids", "likely", "to", "reappear"],
+    "new_elements": ["list", "of", "track_ids", "for", "newly", "appeared", "elements"],
+    "critical_elements_status": {
+      "track_id_example_1": "Visible",
+      "track_id_example_2": "Missing"
+    }
+  },
+  "action_decision": {
+    "analysis_reasoning": "Brief summary connecting the screen analysis to the chosen action.",
+    "action_type": "click | type | scroll | press_key | wait | finish",
+    "target_element_id": <CURRENT_FRAME_ID_of_target_element_if_visible_and_applicable>,
+    "parameters": {
+      "text_to_type": "<text_if_action_is_type>",
+      "key_info": "<key_if_action_is_press_key>",
+      "wait_duration_s": <seconds_if_action_is_wait>
+      # Add other parameters as needed
+    },
+    "is_goal_complete": <true_if_goal_is_fully_achieved_else_false>
+  }
 }
+
 ```
+
+**Action Rules (Apply to `action_decision` fields):**
+* If `action_type` is 'click', `target_element_id` MUST be the integer ID (from Current UI Elements) of a visible element. `parameters` should be empty or contain only non-essential info like `click_type`.
+* If `action_type` is 'type', `parameters.text_to_type` MUST be the string to type. `target_element_id` SHOULD be the ID of the target field if identifiable.
+* If `action_type` is 'press_key', `parameters.key_info` MUST be the key/shortcut string. `target_element_id` MUST be null.
+* If `action_type` is 'scroll', specify direction/amount in `analysis_reasoning` or `parameters` if possible. `target_element_id` MUST be null.
+* If `action_type` is 'wait', specify `parameters.wait_duration_s`. `target_element_id` MUST be null.
+* If `action_type` is 'finish', `is_goal_complete` MUST be true. `target_element_id` and `parameters` should generally be null/empty.
+* If a required element is missing (use Tracked Elements Context), choose an appropriate action like 'wait' or 'press_key' if a keyboard alternative exists, or explain the issue in `screen_analysis.reasoning` and potentially choose 'finish' with `is_goal_complete: false` if stuck. Do NOT hallucinate `target_element_id` for missing elements.
 """
 
+# --- Updated Planner Function ---
 
-# --- Core Logic Function plan_action_for_ui (remains the same as previous version) ---
-# Includes the temporary debug logging for elements on step 2
+
 def plan_action_for_ui(
     elements: List[UIElement],
     user_goal: str,
     action_history: List[str] | None = None,
-    # Add step parameter for conditional logging (adjust call in demo.py)
     step: int = 0,
-) -> Tuple[LLMActionPlan, Optional[UIElement]]:
+    tracking_info: Optional[List[ElementTrack]] = None,  # Accept list of ElementTrack
+) -> Tuple[
+    LLMActionPlan, Optional[UIElement]
+]:  # Still return LLMActionPlan temporarily
     """
-    Uses an LLM to plan the next UI action based on elements, goal, and history.
+    Uses an LLM to analyze UI state with tracking and plan the next action.
+
+    Args:
+        elements: Raw UI elements detected in the current frame.
+        user_goal: The overall goal description.
+        action_history: Descriptions of previous actions taken.
+        step: The current step number.
+        tracking_info: List of ElementTrack objects from the tracker.
+
+    Returns:
+        A tuple containing an LLMActionPlan (converted from ActionDecision)
+        and the targeted UIElement (if any) found in the current frame.
     """
     action_history = action_history or []
     logger.info(
-        f"Planning action for goal: '{user_goal}' with {len(elements)} elements. History: {len(action_history)} steps."
+        f"Planning action for goal: '{user_goal}' with {len(elements)} raw elements. "
+        f"History: {len(action_history)} steps. Tracking: {len(tracking_info or [])} active tracks."
     )
 
-    MAX_ELEMENTS_IN_PROMPT = 1000
-    if len(elements) > MAX_ELEMENTS_IN_PROMPT:
-        logger.warning(
-            f"Too many elements ({len(elements)}), truncating to {MAX_ELEMENTS_IN_PROMPT} for prompt."
-        )
-        elements_for_prompt = elements[:MAX_ELEMENTS_IN_PROMPT]
-    else:
-        elements_for_prompt = elements
-
-    # --- Temporary logging to inspect elements ---
-    # Log elements specifically for the step *after* the first Cmd+Space
-    if step == 1:  # Note: Step index starts at 0 in the demo loop
-        try:
-            elements_repr = [el.to_prompt_repr() for el in elements_for_prompt[:10]]
-            logger.debug(f"Elements for planning (Step {step + 1}): {elements_repr}")
-        except Exception as log_e:
-            logger.warning(f"Could not log elements representation: {log_e}")
-    # --- End temporary logging ---
+    # Limit elements and tracks passed to the prompt for brevity
+    MAX_ELEMENTS_IN_PROMPT = 50
+    MAX_TRACKS_IN_PROMPT = 50
+    elements_for_prompt = elements[:MAX_ELEMENTS_IN_PROMPT]
+    tracking_info_for_prompt = (
+        tracking_info[:MAX_TRACKS_IN_PROMPT] if tracking_info else None
+    )
 
     prompt = render_prompt(
         PROMPT_TEMPLATE,
@@ -112,43 +149,99 @@ def plan_action_for_ui(
         elements=elements_for_prompt,
         action_history=action_history,
         platform=platform.system(),
+        tracking_info=tracking_info_for_prompt,  # Pass tracking info
     )
 
-    system_prompt = "You are an AI assistant. Respond ONLY with valid JSON that conforms to the provided structure. Do not include any explanatory text before or after the JSON block."
+    # System prompt reinforcing the JSON structure
+    system_prompt = (
+        "You are an AI assistant. Respond ONLY with a single valid JSON object "
+        "containing the keys 'screen_analysis' and 'action_decision', conforming "
+        "to the specified Pydantic models. Do not include any explanatory text "
+        "before or after the JSON block, and do not use markdown code fences like ```json."
+    )
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        llm_plan = call_llm_api(messages, LLMActionPlan, system_prompt=system_prompt)
+        # Call LLM expecting the combined analysis and decision structure
+        llm_output = call_llm_api(
+            messages,
+            LLMAnalysisAndDecision,  # Expect the combined model
+            system_prompt=system_prompt,
+            model=config.ANTHROPIC_DEFAULT_MODEL,  # Use configured model
+        )
+        # Log the structured analysis and decision for debugging
+        logger.debug(
+            f"LLM Screen Analysis: {llm_output.screen_analysis.model_dump_json(indent=2)}"
+        )
+        logger.debug(
+            f"LLM Action Decision: {llm_output.action_decision.model_dump_json(indent=2)}"
+        )
+
     except (ValueError, Exception) as e:
-        logger.error(f"Failed to get valid action plan from LLM: {e}")
+        logger.error(
+            f"Failed to get valid analysis/decision from LLM: {e}", exc_info=True
+        )
+        # Fallback or re-raise? Re-raise for now to halt execution on planning failure.
         raise
 
-    target_element = None
-    if llm_plan.element_id is not None:
-        target_element = next(
-            (el for el in elements if el.id == llm_plan.element_id), None
-        )
+    # --- Temporary Conversion back to LLMActionPlan ---
+    # This allows AgentExecutor handlers to work without immediate refactoring.
+    # TODO: Refactor AgentExecutor later to consume ActionDecision directly.
+    analysis = llm_output.screen_analysis
+    decision = llm_output.action_decision
 
-    # Logging Logic
-    if llm_plan.is_goal_complete:
-        logger.info("LLM determined the goal is complete.")
-    elif llm_plan.action in ["click", "type"]:
-        if target_element:
-            logger.info(
-                f"LLM planned action: '{llm_plan.action}' on element ID {llm_plan.element_id} ('{target_element.content[:30]}...')"
-            )
-        elif llm_plan.action == "click":  # Click always needs a target
+    # Combine reasoning (can be refined)
+    combined_reasoning = f"Analysis: {analysis.reasoning}\nDecision Justification: {decision.analysis_reasoning}"
+
+    # Extract parameters for LLMActionPlan
+    # Ensure parameters is not None before accessing .get()
+    parameters = decision.parameters or {}
+    text_param = parameters.get("text_to_type")
+    key_param = parameters.get("key_info")
+    # Add handling for 'wait' action type if needed by LLMActionPlan later
+    # wait_param = parameters.get("wait_duration_s")
+
+    # Handle potential new action types like 'wait' or 'finish' if LLMActionPlan
+    # doesn't support them directly yet. For now, map 'finish'/'wait' to a state?
+    # Let's assume LLMActionPlan.action can hold the new types for now.
+    action_type = decision.action_type
+
+    converted_plan = LLMActionPlan(
+        reasoning=combined_reasoning,
+        action=action_type,  # Pass action_type directly
+        element_id=decision.target_element_id,  # Pass the current frame ID
+        text_to_type=text_param,
+        key_info=key_param,
+        is_goal_complete=decision.is_goal_complete,
+    )
+    # Validate the converted plan (optional, but good practice)
+    try:
+        # Re-validate the object created from ActionDecision fields
+        # This ensures the LLM followed rules that map to LLMActionPlan
+        # Note: This validation might fail if action_type is 'wait' or 'finish'
+        # We might need to adjust LLMActionPlan or skip validation for new types.
+        # For now, let's try validating.
+        LLMActionPlan.model_validate(converted_plan.model_dump())
+    except Exception as validation_err:
+        logger.warning(
+            f"Converted LLMActionPlan failed validation (potentially due to new action types like '{action_type}'): {validation_err}"
+        )
+        # Don't raise, just warn for now, as the ActionDecision was likely valid.
+
+    # Find the target UIElement based on the element_id from the decision
+    target_ui_element = None
+    if converted_plan.element_id is not None:
+        target_ui_element = next(
+            (el for el in elements if el.id == converted_plan.element_id), None
+        )
+        if target_ui_element is None:
             logger.warning(
-                f"LLM planned 'click' on element ID {llm_plan.element_id}, but no such element was found."
+                f"LLM targeted element ID {converted_plan.element_id}, but it was not found in the current raw elements."
             )
-        # else: Typing without element_id might be okay (e.g., search bar)
+            # Keep element_id in plan, but target_ui_element remains None
 
-    else:  # press_key or scroll
-        action_details = f"'{llm_plan.action}'"
-        if llm_plan.key_info:
-            action_details += f" with key_info: '{llm_plan.key_info}'"
-        logger.info(
-            f"LLM planned action: {action_details} (no specific element target)"
-        )
+    logger.info(
+        f"Planner returning action: {converted_plan.action}, Target Elem ID: {converted_plan.element_id}, Goal Complete: {converted_plan.is_goal_complete}"
+    )
 
-    return llm_plan, target_element
+    return converted_plan, target_ui_element  # Return converted plan and element

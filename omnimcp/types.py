@@ -351,3 +351,14 @@ class LoggedStep(BaseModel):
     planning_time_s: float
     execution_time_s: float
     step_time_s: float
+
+
+class LLMAnalysisAndDecision(BaseModel):
+    """Defines the full structured output expected from the LLM, combining analysis and decision."""
+
+    screen_analysis: ScreenAnalysis = Field(
+        description="The LLM's analysis of the current screen state and element tracks."
+    )
+    action_decision: ActionDecision = Field(
+        description="The LLM's decision on the next action based on the analysis."
+    )

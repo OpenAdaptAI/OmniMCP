@@ -6,6 +6,7 @@ from functools import wraps
 from io import BytesIO
 from typing import Any, Callable, List, Tuple, Union, Optional
 import base64
+import os
 import sys
 import threading
 import time
@@ -636,3 +637,83 @@ def downsample_image(image: Image.Image, factor: float) -> Image.Image:
     except Exception as resize_err:
         logger.warning(f"Failed to downsample image, returning original: {resize_err}")
         return image  # Fallback to original on error
+
+
+def setup_run_logging(run_dir=None):
+    """
+    Configure stderr and optional file logging for a specific run.
+
+    Removes default handlers and sets up new ones based on config and run_dir.
+
+    Args:
+        run_dir: Directory to store run-specific logs. If None, only stderr logging
+                 at the configured level is guaranteed (unless default file logging is enabled).
+
+    Returns:
+        The log file path if file logging was configured, otherwise None.
+    """
+    from omnimcp.config import config
+
+    # Remove default loguru handler to avoid duplicate messages if added by default
+    try:
+        logger.remove(0)  # Attempt to remove the default handler ID 0
+    except ValueError:
+        logger.warning(
+            "Could not remove default logger handler (ID 0). May already be removed."
+        )
+        pass  # Ignore if it was already removed or never added
+
+    # Configure stderr logging based on config
+    stderr_level = config.LOG_LEVEL.upper() if config.LOG_LEVEL else "INFO"
+    logger.add(sys.stderr, level=stderr_level)
+    logger.debug(f"Configured stderr logging level: {stderr_level}")
+
+    # Configure file logging if run_dir is provided
+    log_file_path = None
+    if run_dir:
+        try:
+            os.makedirs(run_dir, exist_ok=True)
+            log_file_path = os.path.join(run_dir, "run.log")
+            # Add run-specific log handler (level DEBUG for file)
+            logger.add(
+                log_file_path,
+                rotation="50 MB",
+                level="DEBUG",
+                encoding="utf8",
+                enqueue=True,
+            )
+            logger.info(
+                f"Configured run-specific file logging. Log path: {log_file_path}"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to configure file logging for run_dir '{run_dir}': {e}"
+            )
+            log_file_path = None  # Ensure path is None on failure
+    elif not config.DISABLE_DEFAULT_LOGGING and config.LOG_DIR:
+        # Fallback to default log directory if run_dir is None and default logging not disabled
+        try:
+            default_log_dir = config.LOG_DIR
+            os.makedirs(default_log_dir, exist_ok=True)
+            log_file_path = os.path.join(
+                default_log_dir, "omnimcp_{time:YYYY-MM-DD}.log"
+            )  # Daily default log
+            logger.add(
+                log_file_path,
+                rotation="1 day",
+                level="DEBUG",
+                encoding="utf8",
+                enqueue=True,
+            )
+            logger.info(
+                f"Configured default file logging. Log path pattern: {log_file_path}"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to configure default file logging in '{config.LOG_DIR}': {e}"
+            )
+            log_file_path = None
+    else:
+        logger.info("File logging disabled or no directory specified.")
+
+    return log_file_path  # Return path or None

@@ -1,13 +1,17 @@
 # tests/test_agent_executor.py
 
 import pytest
-import os  # Import added
-from unittest.mock import MagicMock  # Added patch for later if needed
+import os  # Import os
+from unittest.mock import MagicMock
 from PIL import Image
-from typing import List, Optional, Tuple  # Added Callable
+from typing import List, Optional, Tuple
 
 # Necessary type imports
-from omnimcp.types import UIElement, ElementTrack, LLMActionPlan
+from omnimcp.types import (
+    UIElement,
+    ElementTrack,
+    ActionDecision,
+)
 
 # Imports from the module under test
 from omnimcp.agent_executor import AgentExecutor, PlannerCallable
@@ -23,7 +27,7 @@ class MockExecution:
 
     def __init__(self):
         self.calls = []
-        self.fail_on_action: Optional[str] = None  # For testing failures
+        self.fail_on_action: Optional[str] = None
 
     def click(self, x: int, y: int, click_type: str = "single") -> bool:
         self.calls.append(("click", x, y, click_type))
@@ -50,14 +54,13 @@ class MockExecution:
 class MockPerception:
     """Mocks the PerceptionInterface for testing AgentExecutor."""
 
-    # Required attributes matching PerceptionInterface
     elements: List[UIElement]
     tracked_elements_view: List[ElementTrack]
     screen_dimensions: Optional[Tuple[int, int]]
     _last_screenshot: Optional[Image.Image]
     frame_counter: int
-    update_call_count: int  # Renamed from update_calls
-    fail_on_update: bool = False  # For testing failures
+    update_call_count: int  # Correct attribute name
+    fail_on_update: bool = False
 
     def __init__(
         self,
@@ -69,12 +72,11 @@ class MockPerception:
             elements_to_return if elements_to_return is not None else []
         )
         self.screen_dimensions = dims
-        # Initialize state variables
         self.elements = []
         self.tracked_elements_view = []
         self.frame_counter = 0
         self._last_screenshot = Image.new("RGB", dims) if dims else None
-        self.update_call_count = 0  # Use the correct name
+        self.update_call_count = 0  # Initialize correctly
         self.fail_on_update = False
         logger.debug("MockPerception initialized.")
 
@@ -83,18 +85,12 @@ class MockPerception:
         self.update_call_count += 1  # Increment correct counter
         self.frame_counter += 1
 
-        # Simulate failure if configured
-        if (
-            self.fail_on_update and self.update_call_count > 1
-        ):  # Fail on second call typically
+        if self.fail_on_update and self.update_call_count > 1:
             logger.error("MockPerception: Simulating perception failure.")
             raise RuntimeError("Simulated perception failure")
 
-        # Set the elements that the mock should "perceive"
         self.elements = self.elements_to_return
-        # Simulate tracker update (returns empty list as mock doesn't track)
-        self.tracked_elements_view = []
-        # Simulate screenshot/dims update based on init values
+        self.tracked_elements_view = []  # Mock returns empty tracking view
         if self.screen_dimensions:
             self._last_screenshot = Image.new("RGB", self.screen_dimensions)
         else:
@@ -107,8 +103,7 @@ class MockPerception:
 # --- Fixtures ---
 @pytest.fixture
 def mock_perception_component() -> MockPerception:
-    """Provides a default MockPerception instance."""
-    # Provide a default element for tests that expect one
+    """Provides a default MockPerception instance with one element."""
     return MockPerception(
         elements_to_return=[
             UIElement(
@@ -132,35 +127,30 @@ def mock_execution_component() -> MockExecution:
 @pytest.fixture
 def mock_element() -> UIElement:
     """Provides a sample UIElement for tests."""
-    return UIElement(
-        id=0,
-        type="button",
-        content="OK",
-        bounds=(0.1, 0.1, 0.2, 0.1),  # w=0.2, h=0.1
-    )
+    return UIElement(id=0, type="button", content="OK", bounds=(0.1, 0.1, 0.2, 0.1))
 
 
 @pytest.fixture
 def temp_output_dir(tmp_path) -> str:
     """Creates a temporary directory for test run outputs."""
     run_dir = tmp_path / "test_runs"
-    run_dir.mkdir(exist_ok=True)  # Use exist_ok=True
+    run_dir.mkdir(exist_ok=True)
     return str(run_dir)
 
 
 @pytest.fixture
 def mock_box_drawer() -> MagicMock:
     """Provides a mock for the draw_bounding_boxes utility."""
-    return MagicMock(return_value=Image.new("RGB", (10, 10)))  # Return dummy image
+    return MagicMock(return_value=Image.new("RGB", (10, 10)))
 
 
 @pytest.fixture
 def mock_highlighter() -> MagicMock:
     """Provides a mock for the draw_action_highlight utility."""
-    return MagicMock(return_value=Image.new("RGB", (10, 10)))  # Return dummy image
+    return MagicMock(return_value=Image.new("RGB", (10, 10)))
 
 
-# --- Mock Planners ---
+# --- Mock Planners (Updated to return ActionDecision) ---
 
 
 def planner_completes_on_step(n: int) -> PlannerCallable:
@@ -171,27 +161,27 @@ def planner_completes_on_step(n: int) -> PlannerCallable:
         user_goal: str,
         action_history: List[str],
         step: int,
-        tracking_info: Optional[List[ElementTrack]] = None,  # Accept tracking_info
-    ) -> Tuple[LLMActionPlan, Optional[UIElement]]:
+        tracking_info: Optional[List[ElementTrack]] = None,
+    ) -> Tuple[ActionDecision, Optional[UIElement]]:  # Return ActionDecision
         target_element = elements[0] if elements else None
-        # Goal completes when current step index is n-1
-        is_complete = step == (n - 1)
-        # Example: Click first, then signal completion with a different action
-        action = "click" if not is_complete else "press_key"
-        element_id = target_element.id if target_element and action == "click" else None
-        key_info = "Enter" if is_complete else None  # Example final action
+        is_complete = step == (n - 1)  # Complete on index n-1
+        action_type = "click" if not is_complete else "finish"  # Use 'finish' action
+        target_element_id = (
+            target_element.id if target_element and action_type == "click" else None
+        )
+        params = {}
 
-        plan = LLMActionPlan(
-            reasoning=f"Mock reasoning step {step + 1} for goal '{user_goal}'",
-            action=action,
-            element_id=element_id,
-            key_info=key_info,
+        decision = ActionDecision(
+            analysis_reasoning=f"Mock analysis step {step + 1}. Complete={is_complete}",
+            action_type=action_type,
+            target_element_id=target_element_id,
+            parameters=params,
             is_goal_complete=is_complete,
         )
         logger.debug(
-            f"Mock Planner (complete on {n}): Step {step}, Complete: {is_complete}, Action: {action}"
+            f"Mock Planner (complete on {n}): Step {step}, Returning ActionDecision: {decision.action_type}"
         )
-        return plan, target_element
+        return decision, target_element
 
     return mock_planner
 
@@ -204,20 +194,22 @@ def planner_never_completes() -> PlannerCallable:
         user_goal: str,
         action_history: List[str],
         step: int,
-        tracking_info: Optional[List[ElementTrack]] = None,  # Accept tracking_info
-    ) -> Tuple[LLMActionPlan, Optional[UIElement]]:
+        tracking_info: Optional[List[ElementTrack]] = None,
+    ) -> Tuple[ActionDecision, Optional[UIElement]]:  # Return ActionDecision
         target_element = elements[0] if elements else None
-        element_id = target_element.id if target_element else None
-        plan = LLMActionPlan(
-            reasoning=f"Mock reasoning step {step + 1}, goal not complete",
-            action="click",  # Always clicks the first element if present
-            element_id=element_id,
-            text_to_type=None,
-            key_info=None,
+        target_element_id = target_element.id if target_element else None
+
+        decision = ActionDecision(
+            analysis_reasoning=f"Mock analysis step {step + 1}, goal not complete.",
+            action_type="click",  # Always plans click
+            target_element_id=target_element_id,
+            parameters={},
             is_goal_complete=False,
         )
-        logger.debug(f"Mock Planner (never complete): Step {step}, Action: click")
-        return plan, target_element
+        logger.debug(
+            f"Mock Planner (never complete): Step {step}, Returning ActionDecision: {decision.action_type}"
+        )
+        return decision, target_element
 
     return mock_planner
 
@@ -225,15 +217,14 @@ def planner_never_completes() -> PlannerCallable:
 def planner_fails() -> PlannerCallable:
     """Factory for a planner that raises an exception."""
 
-    # Use *args, **kwargs to accept any arguments including tracking_info
-    def failing_planner(*args, **kwargs):
+    def failing_planner(*args, **kwargs):  # Accept any args
         logger.error("Mock Planner: Simulating planning failure.")
         raise ValueError("Mock planning failure")
 
-    return failing_planner
+    return failing_planner  # type: ignore
 
 
-# --- Test Functions ---
+# --- Test Functions (Updated Assertions) ---
 
 
 def test_agent_executor_init(mock_perception_component, mock_execution_component):
@@ -259,16 +250,16 @@ def test_run_completes_goal(
     temp_output_dir: str,
     mocker,
 ):
-    """Test a successful run where the goal is completed on the second step (index 1)."""
+    """Test a successful run completing on the second step (index 1)."""
     mock_final_image = Image.new("RGB", (50, 50), color="green")
     mocker.patch.object(
         agent_executor, "take_screenshot", return_value=mock_final_image
     )
 
-    complete_step_n = 2  # Complete ON step 2 (index 1)
+    complete_step_n = 2  # Completes ON step 2 (index 1)
     executor = AgentExecutor(
         perception=mock_perception_component,
-        planner=planner_completes_on_step(complete_step_n),  # Pass N
+        planner=planner_completes_on_step(complete_step_n),
         execution=mock_execution_component,
         box_drawer=mock_box_drawer,
         highlighter=mock_highlighter,
@@ -279,12 +270,12 @@ def test_run_completes_goal(
     )
 
     assert result is True, "Should return True when goal is completed."
-    # Perception called for step 0 and step 1 (n=2 steps total)
+    # Perception called for step 0 and step 1 (Total: 2)
     assert mock_perception_component.update_call_count == complete_step_n
-    # Execution called only for step 0 (before completion)
+    # Execution called only for step 0 (Click before completion on step 1)
     assert len(mock_execution_component.calls) == complete_step_n - 1
     assert mock_execution_component.calls[0][0] == "click"  # Action in step 0
-    # History includes step 0's planned action, step 1's planned action
+    # History includes plan for step 0 and step 1 (Total: 2)
     assert len(executor.action_history) == complete_step_n
 
     # Check output files
@@ -296,8 +287,11 @@ def test_run_completes_goal(
     assert os.path.exists(os.path.join(run_dir_path, "final_state.png"))
     assert os.path.exists(os.path.join(run_dir_path, "run_metrics.json"))
     assert os.path.exists(os.path.join(run_dir_path, "run_log.jsonl"))
+    # Visualizers called for each step before potential break
     assert mock_box_drawer.call_count == complete_step_n
-    assert mock_highlighter.call_count == complete_step_n
+    assert (
+        mock_highlighter.call_count == 0
+    )  # Highlighter call is currently commented out
 
 
 def test_run_reaches_max_steps(
@@ -328,15 +322,13 @@ def test_run_reaches_max_steps(
     )
 
     assert result is False, "Should return False when max steps reached."
-    # Perception called for each step
     assert mock_perception_component.update_call_count == max_steps
-    # Execution called for each step
     assert len(mock_execution_component.calls) == max_steps
     assert len(executor.action_history) == max_steps
-    # Visualizers called for each step
     assert mock_box_drawer.call_count == max_steps
-    assert mock_highlighter.call_count == max_steps
-    # Check final state image existence
+    assert (
+        mock_highlighter.call_count == 0
+    )  # Highlighter call is currently commented out
     run_dirs = os.listdir(temp_output_dir)
     assert len(run_dirs) == 1
     run_dir_path = os.path.join(temp_output_dir, run_dirs[0])
@@ -349,17 +341,16 @@ def test_run_perception_failure(
     temp_output_dir: str,
     mocker,
 ):
-    """Test that the loop stops if perception fails (e.g., on the second step)."""
+    """Test that the loop stops if perception fails on the second step."""
     mock_final_image = Image.new("RGB", (50, 50), color="red")
     mocker.patch.object(
         agent_executor, "take_screenshot", return_value=mock_final_image
     )
 
-    # Configure mock to fail on the second update call
-    mock_perception_component.fail_on_update = True
+    mock_perception_component.fail_on_update = True  # Configure mock to fail
     executor = AgentExecutor(
         perception=mock_perception_component,
-        planner=planner_never_completes(),  # Planner that would normally continue
+        planner=planner_never_completes(),
         execution=mock_execution_component,
     )
 
@@ -367,13 +358,12 @@ def test_run_perception_failure(
         goal="Test Perception Fail", max_steps=5, output_base_dir=temp_output_dir
     )
 
-    assert result is False  # Run fails
+    assert result is False
     # Update called twice: first succeeds, second raises exception
     assert mock_perception_component.update_call_count == 2
     # Execution only happens for the first step (step 0)
     assert len(mock_execution_component.calls) == 1
-    assert len(executor.action_history) == 1  # Only history for step 1 planned
-    # Check final state image existence (should still be saved)
+    assert len(executor.action_history) == 1
     run_dirs = os.listdir(temp_output_dir)
     assert len(run_dirs) == 1
     run_dir_path = os.path.join(temp_output_dir, run_dirs[0])
@@ -402,14 +392,10 @@ def test_run_planning_failure(
         goal="Test Planning Fail", max_steps=5, output_base_dir=temp_output_dir
     )
 
-    assert result is False  # Run fails
-    # Perception called once before planning fails
+    assert result is False
     assert mock_perception_component.update_call_count == 1
-    # Execution never reached
     assert len(mock_execution_component.calls) == 0
-    # Action history not updated as planning fails before history update
     assert len(executor.action_history) == 0
-    # Check final state image existence
     run_dirs = os.listdir(temp_output_dir)
     assert len(run_dirs) == 1
     run_dir_path = os.path.join(temp_output_dir, run_dirs[0])
@@ -428,7 +414,6 @@ def test_run_execution_failure(
         agent_executor, "take_screenshot", return_value=mock_final_image
     )
 
-    # Configure execution mock to fail on 'click'
     mock_execution_component.fail_on_action = "click"
     executor = AgentExecutor(
         perception=mock_perception_component,
@@ -440,15 +425,11 @@ def test_run_execution_failure(
         goal="Test Execution Fail", max_steps=5, output_base_dir=temp_output_dir
     )
 
-    assert result is False  # Run fails
-    # Perception called once for the first step
+    assert result is False
     assert mock_perception_component.update_call_count == 1
-    # Execution was attempted once (the click that failed)
-    assert len(mock_execution_component.calls) == 1
-    # History includes the planned action before execution failed
+    assert len(mock_execution_component.calls) == 1  # Execution was attempted
     assert len(executor.action_history) == 1
     assert executor.action_history[0].startswith("Step 1: Planned click")
-    # Check final state image existence
     run_dirs = os.listdir(temp_output_dir)
     assert len(run_dirs) == 1
     run_dir_path = os.path.join(temp_output_dir, run_dirs[0])
@@ -473,37 +454,38 @@ def test_coordinate_scaling_for_click(
         agent_executor, "get_scaling_factor", return_value=scaling_factor
     )
 
-    # Use MagicMock directly for the planner in this test
+    # Configure MagicMock planner to return ActionDecision tuple
+    mock_decision_for_click = ActionDecision(
+        analysis_reasoning="Click test",
+        action_type="click",
+        target_element_id=mock_element.id,
+        parameters={},
+        is_goal_complete=False,
+    )
     planner_click = MagicMock(
         return_value=(
-            LLMActionPlan(
-                reasoning="Click test",
-                action="click",
-                element_id=mock_element.id,
-                is_goal_complete=False,
-            ),
-            mock_element,  # Return the mock element as the target
-        )
+            mock_decision_for_click,
+            mock_element,
+        )  # Return ActionDecision tuple
     )
 
     executor = AgentExecutor(
         perception=mock_perception_component,
-        planner=planner_click,  # Use MagicMock planner
+        planner=planner_click,
         execution=mock_execution_component,
     )
 
     executor.run(goal="Test Scaling", max_steps=1, output_base_dir=temp_output_dir)
 
-    # Verify planner was called correctly (including the new tracking_info arg)
+    # Verify planner call arguments
     planner_click.assert_called_once()
     call_args, call_kwargs = planner_click.call_args
-    assert call_kwargs["tracking_info"] == []  # MockPerception returns empty list
+    assert call_kwargs.get("tracking_info") == []  # Check tracking info passed
 
     # Verify execution call
-    # MockPerception dims: W=200, H=100
-    # MockElement bounds: x=0.1, y=0.1, w=0.2, h=0.1
-    # Center physical x = (0.1 + 0.2 / 2) * 200 = 0.2 * 200 = 40
-    # Center physical y = (0.1 + 0.1 / 2) * 100 = 0.15 * 100 = 15
+    # MockPerception dims: W=200, H=100 ; MockElement bounds: x=0.1,y=0.1,w=0.2,h=0.1
+    # Center physical x = (0.1 + 0.2 / 2) * 200 = 40
+    # Center physical y = (0.1 + 0.1 / 2) * 100 = 15
     expected_logical_x = int(40 / scaling_factor)
     expected_logical_y = int(15 / scaling_factor)
 
@@ -517,7 +499,7 @@ def test_coordinate_scaling_for_click(
         "single",
     ), f"Click coordinates incorrect for scaling factor {scaling_factor}"
 
-    # Check final state image existence
+    # Check output files
     run_dirs = os.listdir(temp_output_dir)
     assert len(run_dirs) == 1, "Expected one run directory"
     run_dir_path = os.path.join(temp_output_dir, run_dirs[0])

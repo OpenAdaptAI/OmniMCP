@@ -1,23 +1,22 @@
 # omnimcp/core.py
-from typing import List, Tuple, Optional  # Added Dict, Any
+
+from typing import List, Tuple, Optional
 import platform
 
-# Import necessary types
-from .types import (
+from omnimcp.types import (
     UIElement,
-    ElementTrack,  # Added
-    LLMActionPlan,  # Still needed for temporary return value
-    LLMAnalysisAndDecision,  # Added
+    ElementTrack,
+    ActionDecision,
+    LLMAnalysisAndDecision,
 )
-from .utils import (
+from omnimcp.utils import (
     render_prompt,
     logger,
 )
-from .completions import call_llm_api
-from .config import config  # Import config if needed, e.g., for model name
+from omnimcp.completions import call_llm_api
+from omnimcp.config import config
 
 
-# --- Updated Prompt Template ---
 PROMPT_TEMPLATE = """
 You are an expert UI automation assistant. Your task is to analyze the current UI state, including changes from the previous step, and then decide the single best next action to achieve a given goal.
 
@@ -85,7 +84,7 @@ This shows elements being tracked across frames. Status 'VISIBLE' means seen thi
       "text_to_type": "<text_if_action_is_type>",
       "key_info": "<key_if_action_is_press_key>",
       "wait_duration_s": <seconds_if_action_is_wait>
-      # Add other parameters as needed
+      # Add other parameters as needed (e.g., scroll_direction, scroll_steps)
     },
     "is_goal_complete": <true_if_goal_is_fully_achieved_else_false>
   }
@@ -103,7 +102,7 @@ This shows elements being tracked across frames. Status 'VISIBLE' means seen thi
 * If a required element is missing (use Tracked Elements Context), choose an appropriate action like 'wait' or 'press_key' if a keyboard alternative exists, or explain the issue in `screen_analysis.reasoning` and potentially choose 'finish' with `is_goal_complete: false` if stuck. Do NOT hallucinate `target_element_id` for missing elements.
 """
 
-# --- Updated Planner Function ---
+# --- Planner Function ---
 
 
 def plan_action_for_ui(
@@ -111,10 +110,8 @@ def plan_action_for_ui(
     user_goal: str,
     action_history: List[str] | None = None,
     step: int = 0,
-    tracking_info: Optional[List[ElementTrack]] = None,  # Accept list of ElementTrack
-) -> Tuple[
-    LLMActionPlan, Optional[UIElement]
-]:  # Still return LLMActionPlan temporarily
+    tracking_info: Optional[List[ElementTrack]] = None,
+) -> Tuple[ActionDecision, Optional[UIElement]]:  # Updated return type
     """
     Uses an LLM to analyze UI state with tracking and plan the next action.
 
@@ -126,7 +123,7 @@ def plan_action_for_ui(
         tracking_info: List of ElementTrack objects from the tracker.
 
     Returns:
-        A tuple containing an LLMActionPlan (converted from ActionDecision)
+        A tuple containing the ActionDecision object from the LLM
         and the targeted UIElement (if any) found in the current frame.
     """
     action_history = action_history or []
@@ -135,7 +132,7 @@ def plan_action_for_ui(
         f"History: {len(action_history)} steps. Tracking: {len(tracking_info or [])} active tracks."
     )
 
-    # Limit elements and tracks passed to the prompt for brevity
+    # Limit elements and tracks passed to the prompt for performance/context window
     MAX_ELEMENTS_IN_PROMPT = 50
     MAX_TRACKS_IN_PROMPT = 50
     elements_for_prompt = elements[:MAX_ELEMENTS_IN_PROMPT]
@@ -143,16 +140,17 @@ def plan_action_for_ui(
         tracking_info[:MAX_TRACKS_IN_PROMPT] if tracking_info else None
     )
 
+    # Render the prompt using the template and current context
     prompt = render_prompt(
         PROMPT_TEMPLATE,
         user_goal=user_goal,
         elements=elements_for_prompt,
         action_history=action_history,
         platform=platform.system(),
-        tracking_info=tracking_info_for_prompt,  # Pass tracking info
+        tracking_info=tracking_info_for_prompt,  # Include tracking info
     )
 
-    # System prompt reinforcing the JSON structure
+    # Define the system prompt guiding the LLM's output format
     system_prompt = (
         "You are an AI assistant. Respond ONLY with a single valid JSON object "
         "containing the keys 'screen_analysis' and 'action_decision', conforming "
@@ -162,86 +160,47 @@ def plan_action_for_ui(
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        # Call LLM expecting the combined analysis and decision structure
-        llm_output = call_llm_api(
+        # Call the LLM API expecting the combined analysis and decision structure
+        llm_output: LLMAnalysisAndDecision = call_llm_api(
             messages,
-            LLMAnalysisAndDecision,  # Expect the combined model
+            LLMAnalysisAndDecision,  # Expect the combined model for validation
             system_prompt=system_prompt,
-            model=config.ANTHROPIC_DEFAULT_MODEL,  # Use configured model
+            model=config.ANTHROPIC_DEFAULT_MODEL,  # Use model from config
         )
-        # Log the structured analysis and decision for debugging
-        logger.debug(
-            f"LLM Screen Analysis: {llm_output.screen_analysis.model_dump_json(indent=2)}"
-        )
-        logger.debug(
-            f"LLM Action Decision: {llm_output.action_decision.model_dump_json(indent=2)}"
-        )
+        # Log the structured analysis and decision for debugging purposes
+        # Use model_dump_json for pretty printing if desired, or just log the object
+        logger.debug(f"LLM Screen Analysis Received: {llm_output.screen_analysis}")
+        logger.debug(f"LLM Action Decision Received: {llm_output.action_decision}")
 
     except (ValueError, Exception) as e:
         logger.error(
             f"Failed to get valid analysis/decision from LLM: {e}", exc_info=True
         )
-        # Fallback or re-raise? Re-raise for now to halt execution on planning failure.
+        # Propagate the error to halt execution on planning failure
         raise
 
-    # --- Temporary Conversion back to LLMActionPlan ---
-    # This allows AgentExecutor handlers to work without immediate refactoring.
-    # TODO: Refactor AgentExecutor later to consume ActionDecision directly.
-    analysis = llm_output.screen_analysis
+    # Extract the decision part to be returned
     decision = llm_output.action_decision
 
-    # Combine reasoning (can be refined)
-    combined_reasoning = f"Analysis: {analysis.reasoning}\nDecision Justification: {decision.analysis_reasoning}"
-
-    # Extract parameters for LLMActionPlan
-    # Ensure parameters is not None before accessing .get()
-    parameters = decision.parameters or {}
-    text_param = parameters.get("text_to_type")
-    key_param = parameters.get("key_info")
-    # Add handling for 'wait' action type if needed by LLMActionPlan later
-    # wait_param = parameters.get("wait_duration_s")
-
-    # Handle potential new action types like 'wait' or 'finish' if LLMActionPlan
-    # doesn't support them directly yet. For now, map 'finish'/'wait' to a state?
-    # Let's assume LLMActionPlan.action can hold the new types for now.
-    action_type = decision.action_type
-
-    converted_plan = LLMActionPlan(
-        reasoning=combined_reasoning,
-        action=action_type,  # Pass action_type directly
-        element_id=decision.target_element_id,  # Pass the current frame ID
-        text_to_type=text_param,
-        key_info=key_param,
-        is_goal_complete=decision.is_goal_complete,
-    )
-    # Validate the converted plan (optional, but good practice)
-    try:
-        # Re-validate the object created from ActionDecision fields
-        # This ensures the LLM followed rules that map to LLMActionPlan
-        # Note: This validation might fail if action_type is 'wait' or 'finish'
-        # We might need to adjust LLMActionPlan or skip validation for new types.
-        # For now, let's try validating.
-        LLMActionPlan.model_validate(converted_plan.model_dump())
-    except Exception as validation_err:
-        logger.warning(
-            f"Converted LLMActionPlan failed validation (potentially due to new action types like '{action_type}'): {validation_err}"
-        )
-        # Don't raise, just warn for now, as the ActionDecision was likely valid.
-
-    # Find the target UIElement based on the element_id from the decision
+    # Find the target UIElement in the current frame based on the ID from the decision
     target_ui_element = None
-    if converted_plan.element_id is not None:
+    if decision.target_element_id is not None:
+        # Search through the raw elements detected in *this* frame
         target_ui_element = next(
-            (el for el in elements if el.id == converted_plan.element_id), None
+            (el for el in elements if el.id == decision.target_element_id), None
         )
         if target_ui_element is None:
             logger.warning(
-                f"LLM targeted element ID {converted_plan.element_id}, but it was not found in the current raw elements."
+                f"LLM targeted element ID {decision.target_element_id} in action decision, "
+                f"but it was not found in the current raw elements list ({len(elements)} elements)."
             )
-            # Keep element_id in plan, but target_ui_element remains None
+            # The target_ui_element remains None, AgentExecutor action handlers must check for this
 
     logger.info(
-        f"Planner returning action: {converted_plan.action}, Target Elem ID: {converted_plan.element_id}, Goal Complete: {converted_plan.is_goal_complete}"
+        f"Planner returning action_type: {decision.action_type}, "
+        f"Target Elem ID: {decision.target_element_id}, "
+        f"Goal Complete: {decision.is_goal_complete}"
     )
 
-    return converted_plan, target_ui_element  # Return converted plan and element
+    # Return the validated ActionDecision object and the resolved target element
+    return decision, target_ui_element

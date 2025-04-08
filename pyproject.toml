@@ -10,7 +10,7 @@ version = "0.1.0"
 description = "OmniMCP - OmniParser with Model Control Protocol for UI Automation"
 readme = "README.md"
 # Allow <3.13 as upper bound seems reasonable unless specific 3.12+ features are needed
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11,<3.13"
 # Use SPDX identifier string for license
 license = "MIT"
 authors = [
@@ -37,6 +37,7 @@ dependencies = [
     # Add platform-specific dependency for macOS
     "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
     "scipy>=1.15.2",
+    "pydantic-prompt>=0.1.0",
 ]
 
 [project.scripts]

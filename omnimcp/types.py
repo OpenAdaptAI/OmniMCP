@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any, Tuple, Literal
 
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic_prompt import prompt_schema
 
 # Define Bounds (assuming normalized coordinates 0.0-1.0)
 Bounds = Tuple[float, float, float, float]  # (x, y, width, height)
@@ -154,7 +155,7 @@ class LLMActionPlan(BaseModel):
     reasoning: str = Field(
         ..., description="Step-by-step thinking process leading to the chosen action."
     )
-    action: Literal["click", "type", "scroll", "press_key"] = Field(
+    action: Literal["click", "type", "scroll", "press_key", "wait"] = Field(
         ..., description="The single next action to perform."
     )
     is_goal_complete: bool = Field(
@@ -264,50 +265,50 @@ class ElementTrack(BaseModel):
             return f"TrackID {self.track_id} (Type Unknown) - Status: {status}, LastSeen: f{self.last_seen_frame}"
 
 
+@prompt_schema
 class ScreenAnalysis(BaseModel):
     """LLM's analysis of the current UI state with tracking information."""
 
-    reasoning: str = Field(
-        description="Detailed reasoning about the UI state, changes, and tracked elements relevant to the goal."
-    )
-    disappeared_elements: List[str] = Field(
-        default_factory=list,
-        description="List of track_ids considered permanently gone.",
-    )
-    temporarily_missing_elements: List[str] = Field(
-        default_factory=list,
-        description="List of track_ids considered temporarily missing but likely to reappear.",
-    )
-    new_elements: List[str] = Field(
-        default_factory=list,
-        description="List of track_ids for newly appeared elements.",
-    )
-    critical_elements_status: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Status (e.g., 'Visible', 'Missing', 'Gone') of track_ids deemed critical for the current goal/step.",
-    )
+    reasoning: str
+    """Detailed reasoning about the UI state, changes from the previous state using tracking context, and assessment relevant to the goal."""
+
+    disappeared_elements: List[str] = Field(default_factory=list)
+    """List of track_ids considered permanently gone since the last visible frame."""
+
+    temporarily_missing_elements: List[str] = Field(default_factory=list)
+    """List of track_ids considered temporarily missing (e.g., due to UI transition) but likely to reappear."""
+
+    new_elements: List[str] = Field(default_factory=list)
+    """List of track_ids for newly appeared elements this frame."""
+
+    critical_elements_status: Dict[str, str] = Field(default_factory=dict)
+    """Dictionary mapping track_ids of elements deemed critical for the current goal/step to their status (e.g., 'Visible', 'Missing', 'Gone')."""
 
 
+@prompt_schema
 class ActionDecision(BaseModel):
     """LLM's decision on the next action based on its analysis."""
 
-    analysis_reasoning: str = Field(
-        description="Reference or summary of the reasoning from ScreenAnalysis leading to this action."
-    )
-    action_type: str = Field(
-        description="The type of action to perform (e.g., 'click', 'type', 'press_key', 'wait', 'finish')."
-    )
-    target_element_id: Optional[int] = Field(
-        None,
-        description="The CURRENT per-frame 'id' of the target UIElement, if applicable and visible.",
-    )
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Action parameters, e.g., {'text_to_type': 'hello', 'key_info': 'Enter'}",
-    )
-    is_goal_complete: bool = Field(
-        False, description="Set to true if the overall user goal is now complete."
-    )
+    analysis_reasoning: str
+    """Brief summary connecting the screen analysis to the chosen action."""
+
+    action_type: Literal["click", "type", "scroll", "press_key", "wait", "finish"]
+    """The type of action to perform."""
+
+    target_element_id: Optional[int] = Field(default=None)
+    """The CURRENT per-frame 'id' of the target UIElement, IF the action applies to a specific visible element (e.g., 'click', 'type'). Must be null otherwise."""
+
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    """Action-specific parameters. Examples:
+       - For 'type': {'text_to_type': 'string'}
+       - For 'press_key': {'key_info': 'key_string'}
+       - For 'wait': {'wait_duration_s': float}
+       - For 'scroll': {'scroll_direction': 'up'/'down'/'left'/'right', 'scroll_steps': int}
+       - For 'click': {'click_type': 'single'/'double'} (Optional)
+    """
+
+    is_goal_complete: bool = Field(default=False)
+    """Set to true if the overall user goal is fully achieved after this action decision."""
 
 
 # --- Model for Structured Step Logging ---
@@ -353,12 +354,12 @@ class LoggedStep(BaseModel):
     step_time_s: float
 
 
+@prompt_schema
 class LLMAnalysisAndDecision(BaseModel):
     """Defines the full structured output expected from the LLM, combining analysis and decision."""
 
-    screen_analysis: ScreenAnalysis = Field(
-        description="The LLM's analysis of the current screen state and element tracks."
-    )
-    action_decision: ActionDecision = Field(
-        description="The LLM's decision on the next action based on the analysis."
-    )
+    screen_analysis: ScreenAnalysis
+    """The LLM's analysis of the current screen state and element tracks."""
+
+    action_decision: ActionDecision
+    """The LLM's decision on the next action based on the analysis."""

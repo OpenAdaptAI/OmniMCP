@@ -56,6 +56,14 @@ test = [
     "mcp[cli]",
 ]
 
+recorder = [
+    "pynput>=1.7.6", 
+    "mss>=6.1.0",     
+    "pillow>=10.0.0",
+    "loguru>=0.6.0",  
+]
+
+
 # Add Ruff configuration if you want to manage it here
 # [tool.ruff]
 # line-length = 88

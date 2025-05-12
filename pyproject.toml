@@ -56,7 +56,7 @@ test = [
     "mcp[cli]",
 ]
 
-recorder = [
+record = [
     "pynput>=1.7.6", 
     "mss>=6.1.0",     
     "pillow>=10.0.0",

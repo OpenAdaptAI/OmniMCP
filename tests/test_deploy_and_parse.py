@@ -5,13 +5,12 @@ A simple script to test OmniParser deployment, screenshotting,
 parsing, and mapping to UIElements using VisualState.
 """
 
-import sys
 import asyncio  # Needed for async VisualState.update()
+import sys
 
-from omnimcp.utils import logger
 from omnimcp.omniparser.client import OmniParserClient
+from omnimcp.utils import logger
 from omnimcp.visual_state import VisualState
-
 
 if __name__ == "__main__":
     logger.info("--- Starting OmniParser Integration Test ---")

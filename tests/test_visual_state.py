@@ -1,15 +1,15 @@
 # tests/test_omnimcp_core.py
 
-import pytest
 from unittest.mock import patch
-from PIL import Image
 
-# Corrected imports based on file moves
-from omnimcp.visual_state import VisualState
+import pytest
+from PIL import Image
 
 # Removed: from omnimcp.mcp_server import OmniMCP (no longer used in this file)
 from omnimcp.synthetic_ui import generate_login_screen
 
+# Corrected imports based on file moves
+from omnimcp.visual_state import VisualState
 
 # --- Fixtures ---
 

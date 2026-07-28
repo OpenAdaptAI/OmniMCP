@@ -7,9 +7,9 @@ interfaces for running the MCP server and other utilities.
 """
 
 import asyncio
+
 import fire
 from loguru import logger
-
 from omnimcp.omnimcp import OmniMCP
 
 

@@ -1,11 +1,11 @@
 # make_gif.py
+import glob
 import os
 import sys
-import glob
-from PIL import Image
+
 import fire
-from typing import List
 from loguru import logger  # Use logger for consistency
+from PIL import Image
 
 
 def create_gif(
@@ -54,7 +54,7 @@ def create_gif(
         sys.exit(1)
 
     # Create list of image objects
-    frames: List[Image.Image] = []
+    frames: list[Image.Image] = []
     try:
         logger.info("Opening image files...")
         for filename in png_files:

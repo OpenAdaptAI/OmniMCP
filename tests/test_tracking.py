@@ -1,11 +1,12 @@
 # tests/test_tracking.py
 
+
 import pytest
-from typing import List
+
+from omnimcp.tracking import SimpleElementTracker
 
 # Assuming types and tracker are in these locations
-from omnimcp.types import UIElement, Bounds
-from omnimcp.tracking import SimpleElementTracker
+from omnimcp.types import Bounds, UIElement
 
 # --- Test Helpers ---
 
@@ -108,7 +109,7 @@ def test_update_empty_current_elements(tracker: SimpleElementTracker):
     assert initial_track.latest_element is not None
 
     # Frame 2: Update with empty list
-    frame2_elements: List[UIElement] = []
+    frame2_elements: list[UIElement] = []
     tracked_list = tracker.update(frame2_elements, 2)
 
     assert len(tracked_list) == 1  # Track still exists

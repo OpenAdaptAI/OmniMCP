@@ -6,17 +6,17 @@ Generates UI images and simulates the loop without real screen interaction.
 
 import os
 import time
-from typing import List, Optional
+
+from omnimcp.core import LLMActionPlan, plan_action_for_ui
 
 # Import necessary components from the project
 from omnimcp.synthetic_ui import (
+    draw_highlight,  # Use the original draw_highlight from synthetic_ui
     generate_login_screen,
     simulate_action,
-    draw_highlight,  # Use the original draw_highlight from synthetic_ui
 )
-from omnimcp.core import plan_action_for_ui, LLMActionPlan
-from omnimcp.utils import logger
 from omnimcp.types import UIElement
+from omnimcp.utils import logger
 
 # NOTE ON REFACTORING:
 # The main loop structure in this script (run_synthetic_planner_demo) is similar
@@ -56,7 +56,7 @@ def run_synthetic_planner_demo():
     user_goal = "Log in using username 'testuser' and password 'password123'"
     logger.info(f"User Goal: '{user_goal}'")
 
-    action_history: List[str] = []
+    action_history: list[str] = []
     goal_achieved_flag = False
     last_step_completed = -1
 
@@ -78,8 +78,8 @@ def run_synthetic_planner_demo():
 
         # 2. Plan Next Action
         logger.info("Planning action with LLM...")
-        llm_plan: Optional[LLMActionPlan] = None
-        target_element: Optional[UIElement] = None
+        llm_plan: LLMActionPlan | None = None
+        target_element: UIElement | None = None
         try:
             llm_plan, target_element = plan_action_for_ui(
                 elements=elements,
@@ -106,12 +106,15 @@ def run_synthetic_planner_demo():
                 goal_achieved_flag = True
 
             # --- Updated Validation Check ---
-            if not goal_achieved_flag:
-                if llm_plan.action == "click" and not target_element:
-                    logger.error(
-                        f"LLM planned 'click' on invalid element ID ({llm_plan.element_id}). Stopping."
-                    )
-                    break
+            if (
+                not goal_achieved_flag
+                and llm_plan.action == "click"
+                and not target_element
+            ):
+                logger.error(
+                    f"LLM planned 'click' on invalid element ID ({llm_plan.element_id}). Stopping."
+                )
+                break
 
             # 4. Visualize Planned Action (uses synthetic_ui.draw_highlight)
             highlight_img_path = os.path.join(

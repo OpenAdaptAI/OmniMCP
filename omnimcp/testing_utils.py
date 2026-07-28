@@ -5,8 +5,9 @@ Utilities for generating synthetic UI images and test data for OmniMCP tests.
 """
 
 import os
+from typing import Any
+
 from PIL import Image, ImageDraw, ImageFont
-from typing import List, Dict, Tuple, Any, Optional
 
 # Assuming types are implicitly available via callers or add specific imports if needed
 # from .types import Bounds # Assuming Bounds = Tuple[float, float, float, float]
@@ -15,15 +16,15 @@ from typing import List, Dict, Tuple, Any, Optional
 try:
     # Adjust path if needed, but rely on default if not found
     FONT = ImageFont.truetype("arial.ttf", 15)
-except IOError:
+except OSError:
     # logger.warning("Arial font not found. Using default PIL font.") # logger might not be configured here
     print("Warning: Arial font not found. Using default PIL font.")
     FONT = ImageFont.load_default()
 
 
 def generate_test_ui(
-    save_path: Optional[str] = None,
-) -> Tuple[Image.Image, List[Dict[str, Any]]]:
+    save_path: str | None = None,
+) -> tuple[Image.Image, list[dict[str, Any]]]:
     """
     Generate synthetic UI image with known elements.
 
@@ -118,8 +119,8 @@ def generate_test_ui(
 
 
 def generate_action_test_pair(
-    action_type: str = "click", target: str = "button", save_dir: Optional[str] = None
-) -> Tuple[Image.Image, Image.Image, List[Dict[str, Any]]]:
+    action_type: str = "click", target: str = "button", save_dir: str | None = None
+) -> tuple[Image.Image, Image.Image, list[dict[str, Any]]]:
     """Generate before/after UI image pair for a specific action."""
     temp_save_path = None
     if save_dir:

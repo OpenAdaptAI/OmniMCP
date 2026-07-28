@@ -3,14 +3,15 @@
 """End-to-end tests for OmniParser deployment and function."""
 
 import time
-import pytest
 from pathlib import Path
-from PIL import Image
 
+import pytest
 from loguru import logger
+from PIL import Image
 
 # Only import OmniParserClient now
 from omnimcp.omniparser.client import OmniParserClient
+
 # Config might still be needed if checking AWS env vars, keep for now
 # from omnimcp.config import config # Removed as test logic doesn't directly use it
 

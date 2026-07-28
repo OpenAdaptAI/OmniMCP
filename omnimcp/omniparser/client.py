@@ -3,21 +3,20 @@
 """Client module for interacting with the OmniParser server."""
 
 import base64
-from typing import Optional, Dict, List
 
-from loguru import logger
-from PIL import Image, ImageDraw
 import boto3  # Need boto3 for the initial check
 import requests
+from loguru import logger
+from PIL import Image, ImageDraw
 
-from .server import Deploy
 from ..config import config
+from .server import Deploy
 
 
 class OmniParserClient:
     """Client for interacting with the OmniParser server."""
 
-    def __init__(self, server_url: Optional[str] = None, auto_deploy: bool = True):
+    def __init__(self, server_url: str | None = None, auto_deploy: bool = True):
         """Initialize the OmniParser client.
 
         Args:
@@ -51,7 +50,7 @@ class OmniParserClient:
                 )
                 # Get the most recently launched running instance
                 running_instances = sorted(
-                    list(instances), key=lambda i: i.launch_time, reverse=True
+                    instances, key=lambda i: i.launch_time, reverse=True
                 )
                 instance = running_instances[0] if running_instances else None
 
@@ -137,7 +136,7 @@ class OmniParserClient:
             )
             raise RuntimeError(f"Server probe failed: {e}") from e
 
-    def parse_image(self, image: Image.Image) -> Dict:
+    def parse_image(self, image: Image.Image) -> dict:
         """Parse an image using the OmniParser server.
 
         Args:
@@ -171,7 +170,7 @@ class OmniParserClient:
         return base64.b64encode(buffered.getvalue()).decode()
 
     def visualize_results(
-        self, image: Image.Image, parsed_content: List[Dict]
+        self, image: Image.Image, parsed_content: list[dict]
     ) -> Image.Image:
         """Visualize parsing results on the image.
 

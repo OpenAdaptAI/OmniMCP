@@ -1,17 +1,14 @@
 # omnimcp/core.py
-from typing import List, Tuple, Optional
-
 import platform
 
-# Assuming these imports are correct
-from .types import UIElement
-from .utils import (
-    render_prompt,
-    logger,
-)  # Assuming render_prompt handles template creation
 from .completions import call_llm_api
-from .types import LLMActionPlan
 
+# Assuming these imports are correct
+from .types import LLMActionPlan, UIElement
+from .utils import (
+    logger,
+    render_prompt,
+)  # Assuming render_prompt handles template creation
 
 PROMPT_TEMPLATE = """
 You are an expert UI automation assistant. Your task is to determine the single next best action to take on a user interface (UI) to achieve a given user goal, and assess if the goal is already complete.
@@ -73,12 +70,12 @@ Here is a list of UI elements currently visible on the screen (showing first 50 
 # --- Core Logic Function plan_action_for_ui (remains the same as previous version) ---
 # Includes the temporary debug logging for elements on step 2
 def plan_action_for_ui(
-    elements: List[UIElement],
+    elements: list[UIElement],
     user_goal: str,
-    action_history: List[str] | None = None,
+    action_history: list[str] | None = None,
     # Add step parameter for conditional logging (adjust call in demo.py)
     step: int = 0,
-) -> Tuple[LLMActionPlan, Optional[UIElement]]:
+) -> tuple[LLMActionPlan, UIElement | None]:
     """
     Uses an LLM to plan the next UI action based on elements, goal, and history.
     """

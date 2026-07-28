@@ -2,8 +2,8 @@
 import pytest
 
 # Assuming imports work based on installation/path
-from omnimcp.core import plan_action_for_ui, LLMActionPlan
-from omnimcp.types import UIElement, Bounds
+from omnimcp.core import LLMActionPlan, plan_action_for_ui
+from omnimcp.types import Bounds, UIElement
 
 # --- Fixture for Sample Elements ---
 
@@ -69,7 +69,7 @@ def test_plan_action_step1_type_user(mocker, sample_elements):
 
     # Assertions
     mock_llm_api.assert_called_once()  # Check API was called
-    call_args, call_kwargs = mock_llm_api.call_args
+    call_args, _call_kwargs = mock_llm_api.call_args
     # Check prompt content (basic check)
     messages = call_args[0]
     assert user_goal in messages[0]["content"]
@@ -119,7 +119,7 @@ def test_plan_action_step3_click_login(mocker, sample_elements):
 
     # Assertions
     mock_llm_api.assert_called_once()
-    call_args, call_kwargs = mock_llm_api.call_args
+    call_args, _call_kwargs = mock_llm_api.call_args
     messages = call_args[0]
     # Check history rendering in prompt
     assert action_history[0] in messages[0]["content"]

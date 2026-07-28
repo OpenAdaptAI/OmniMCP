@@ -3,7 +3,6 @@
 """Configuration management for OmniMCP."""
 
 import os
-from typing import Optional
 from pathlib import Path
 
 from pydantic import Field
@@ -16,14 +15,13 @@ class OmniMCPConfig(BaseSettings):
     LLM_PROVIDER: str = "anthropic"
 
     # Claude API configuration
-    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: str | None = None
     ANTHROPIC_DEFAULT_MODEL: str = "claude-3-7-sonnet-20250219"
     # ANTHROPIC_DEFAULT_MODEL: str = "claude-3-haiku-20240307"
 
     # OmniParser configuration
     PROJECT_NAME: str = "omnimcp"
-    OMNIPARSER_URL: Optional[str] = None
-    OMNIPARSER_DOWNSAMPLE_FACTOR: float = 1.0
+    OMNIPARSER_URL: str | None = None
     OMNIPARSER_DOWNSAMPLE_FACTOR: float = Field(
         1.0,
         ge=0.1,  # Minimum factor 10%
@@ -33,9 +31,9 @@ class OmniMCPConfig(BaseSettings):
     INACTIVITY_TIMEOUT_MINUTES: int = 60
 
     # AWS deployment settings (for remote OmniParser)
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
-    AWS_REGION: Optional[str] = "us-west-2"
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
+    AWS_REGION: str | None = "us-west-2"
 
     # OmniParser deployment configuration
     REPO_URL: str = "https://github.com/microsoft/OmniParser.git"
@@ -52,7 +50,7 @@ class OmniMCPConfig(BaseSettings):
     COMMAND_TIMEOUT: int = 600  # 10 minutes
 
     # Logging configuration
-    LOG_DIR: Optional[str] = "logs"
+    LOG_DIR: str | None = "logs"
     DISABLE_DEFAULT_LOGGING: bool = False
 
     # Run output configuration

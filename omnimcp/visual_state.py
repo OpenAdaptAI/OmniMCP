@@ -5,15 +5,15 @@ Manages the perceived state of the UI using screenshots and OmniParser.
 """
 
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from PIL import Image
 from loguru import logger
+from PIL import Image
 
 from omnimcp.config import config
 from omnimcp.omniparser.client import OmniParserClient
 from omnimcp.types import Bounds, UIElement
-from omnimcp.utils import take_screenshot, downsample_image
+from omnimcp.utils import downsample_image, take_screenshot
 
 
 class VisualState:
@@ -24,14 +24,12 @@ class VisualState:
 
     def __init__(self, parser_client: OmniParserClient):
         """Initialize the visual state manager."""
-        self.elements: List[UIElement] = []
-        self.timestamp: Optional[float] = None
-        self.screen_dimensions: Optional[Tuple[int, int]] = (
+        self.elements: list[UIElement] = []
+        self.timestamp: float | None = None
+        self.screen_dimensions: tuple[int, int] | None = (
             None  # Stores ORIGINAL dimensions
         )
-        self._last_screenshot: Optional[Image.Image] = (
-            None  # Stores ORIGINAL screenshot
-        )
+        self._last_screenshot: Image.Image | None = None  # Stores ORIGINAL screenshot
         self._parser_client = parser_client
         if not self._parser_client:
             logger.critical("VisualState initialized without a valid parser_client!")
@@ -46,7 +44,7 @@ class VisualState:
         """
         logger.info("VisualState update requested...")
         start_time = time.time()
-        screenshot: Optional[Image.Image] = None  # Define screenshot outside try
+        screenshot: Image.Image | None = None  # Define screenshot outside try
         try:
             # 1. Capture screenshot
             logger.debug("Taking screenshot...")
@@ -108,9 +106,9 @@ class VisualState:
             else:
                 self.screen_dimensions = None
 
-    def _update_elements_from_parser(self, parser_json: Dict):
+    def _update_elements_from_parser(self, parser_json: dict):
         """Maps the raw JSON output from OmniParser to UIElement objects."""
-        new_elements: List[UIElement] = []
+        new_elements: list[UIElement] = []
         element_id_counter = 0
 
         if not isinstance(parser_json, dict):
@@ -124,7 +122,7 @@ class VisualState:
             self.elements = new_elements
             return
 
-        raw_elements: List[Dict[str, Any]] = parser_json.get("parsed_content_list", [])
+        raw_elements: list[dict[str, Any]] = parser_json.get("parsed_content_list", [])
         if not isinstance(raw_elements, list):
             logger.error(
                 f"Expected 'parsed_content_list' to be a list, got: {type(raw_elements)}"
@@ -142,8 +140,8 @@ class VisualState:
         self.elements = new_elements
 
     def _convert_to_ui_element(
-        self, item: Dict[str, Any], element_id: int
-    ) -> Optional[UIElement]:
+        self, item: dict[str, Any], element_id: int
+    ) -> UIElement | None:
         """Converts a single item from OmniParser result to a UIElement."""
         try:
             if not isinstance(item, dict):
@@ -222,7 +220,7 @@ class VisualState:
             )
             return None
 
-    def find_element(self, description: str) -> Optional[UIElement]:
+    def find_element(self, description: str) -> UIElement | None:
         """Finds the best matching element using basic keyword matching."""
         logger.debug(f"Finding element: '{description}' using basic matching.")
         if not self.elements:

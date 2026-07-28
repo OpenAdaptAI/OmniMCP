@@ -2,20 +2,20 @@
 
 """Tests for OmniParser deployment functionality (E2E)."""
 
-import pytest
 import time
-import boto3
-import requests
-from typing import List
 
-from omnimcp.omniparser.server import Deploy
+import boto3
+import pytest
+import requests
+
 from omnimcp.config import config
+from omnimcp.omniparser.server import Deploy
 
 # Import from the new location inside the package
 
 
 # --- Helper Function ---
-def get_running_parser_instances() -> List[dict]:
+def get_running_parser_instances() -> list[dict]:
     """Get any running OmniParser instances."""
     ec2 = boto3.resource("ec2", region_name=config.AWS_REGION)
     instances = list(

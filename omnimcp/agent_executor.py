@@ -3,10 +3,10 @@
 import datetime
 import os
 import time
-from typing import Callable, List, Optional, Tuple, Protocol, Dict
+from collections.abc import Callable
+from typing import Protocol
 
 from PIL import Image
-
 
 from omnimcp import config, setup_run_logging
 from omnimcp.types import LLMActionPlan, UIElement
@@ -21,9 +21,9 @@ from omnimcp.utils import (
 
 
 class PerceptionInterface(Protocol):
-    elements: List[UIElement]
-    screen_dimensions: Optional[Tuple[int, int]]
-    _last_screenshot: Optional[Image.Image]
+    elements: list[UIElement]
+    screen_dimensions: tuple[int, int] | None
+    _last_screenshot: Image.Image | None
 
     def update(self) -> None: ...
 
@@ -36,8 +36,8 @@ class ExecutionInterface(Protocol):
 
 
 PlannerCallable = Callable[
-    [List[UIElement], str, List[str], int, str],
-    Tuple[LLMActionPlan, Optional[UIElement]],
+    [list[UIElement], str, list[str], int, str],
+    tuple[LLMActionPlan, UIElement | None],
 ]
 ImageProcessorCallable = Callable[..., Image.Image]
 
@@ -56,18 +56,18 @@ class AgentExecutor:
         perception: PerceptionInterface,
         planner: PlannerCallable,
         execution: ExecutionInterface,
-        box_drawer: Optional[ImageProcessorCallable] = draw_bounding_boxes,
-        highlighter: Optional[ImageProcessorCallable] = draw_action_highlight,
+        box_drawer: ImageProcessorCallable | None = draw_bounding_boxes,
+        highlighter: ImageProcessorCallable | None = draw_action_highlight,
     ):
         self._perception = perception
         self._planner = planner
         self._execution = execution
         self._box_drawer = box_drawer
         self._highlighter = highlighter
-        self.action_history: List[str] = []
+        self.action_history: list[str] = []
 
         # Map action names to their handler methods
-        self._action_handlers: Dict[str, Callable[..., bool]] = {
+        self._action_handlers: dict[str, Callable[..., bool]] = {
             "click": self._execute_click,
             "type": self._execute_type,
             "press_key": self._execute_press_key,
@@ -80,8 +80,8 @@ class AgentExecutor:
     def _execute_click(
         self,
         plan: LLMActionPlan,
-        target_element: Optional[UIElement],
-        screen_dims: Tuple[int, int],
+        target_element: UIElement | None,
+        screen_dims: tuple[int, int],
         scaling_factor: int,
     ) -> bool:
         """Handles the 'click' action."""
@@ -110,8 +110,8 @@ class AgentExecutor:
     def _execute_type(
         self,
         plan: LLMActionPlan,
-        target_element: Optional[UIElement],
-        screen_dims: Tuple[int, int],
+        target_element: UIElement | None,
+        screen_dims: tuple[int, int],
         scaling_factor: int,
     ) -> bool:
         """Handles the 'type' action."""
@@ -146,8 +146,8 @@ class AgentExecutor:
     def _execute_press_key(
         self,
         plan: LLMActionPlan,
-        target_element: Optional[UIElement],  # Unused, but maintains handler signature
-        screen_dims: Tuple[int, int],  # Unused
+        target_element: UIElement | None,  # Unused, but maintains handler signature
+        screen_dims: tuple[int, int],  # Unused
         scaling_factor: int,  # Unused
     ) -> bool:
         """Handles the 'press_key' action."""
@@ -160,8 +160,8 @@ class AgentExecutor:
     def _execute_scroll(
         self,
         plan: LLMActionPlan,
-        target_element: Optional[UIElement],  # Unused
-        screen_dims: Tuple[int, int],  # Unused
+        target_element: UIElement | None,  # Unused
+        screen_dims: tuple[int, int],  # Unused
         scaling_factor: int,  # Unused
     ) -> bool:
         """Handles the 'scroll' action."""
@@ -203,7 +203,7 @@ class AgentExecutor:
     # these alternatives for more complex or reactive tasks.
 
     def run(
-        self, goal: str, max_steps: int = 10, output_base_dir: Optional[str] = None
+        self, goal: str, max_steps: int = 10, output_base_dir: str | None = None
     ) -> bool:
         """
         Runs the main perceive-plan-act loop to achieve the goal.
@@ -222,7 +222,11 @@ class AgentExecutor:
         if output_base_dir is None:
             output_base_dir = config.RUN_OUTPUT_DIR
 
-        run_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_timestamp = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .astimezone()
+            .strftime("%Y%m%d_%H%M%S")
+        )
         run_output_dir = os.path.join(output_base_dir, run_timestamp)
 
         try:
@@ -255,9 +259,9 @@ class AgentExecutor:
             logger.info(f"\n--- Step {step + 1}/{max_steps} ---")
             step_start_time = time.time()
             step_img_prefix = f"step_{step + 1}"
-            current_image: Optional[Image.Image] = None
-            current_elements: List[UIElement] = []
-            screen_dimensions: Optional[Tuple[int, int]] = None
+            current_image: Image.Image | None = None
+            current_elements: list[UIElement] = []
+            screen_dimensions: tuple[int, int] | None = None
 
             # 1. Perceive State
             try:
@@ -302,8 +306,8 @@ class AgentExecutor:
                     logger.warning(f"Could not save parsed state image: {draw_boxes_e}")
 
             # 3. Plan Action (Unchanged)
-            llm_plan: Optional[LLMActionPlan] = None
-            target_element: Optional[UIElement] = None
+            llm_plan: LLMActionPlan | None = None
+            target_element: UIElement | None = None
             try:
                 logger.debug("Planning next action...")
                 llm_plan, target_element = self._planner(

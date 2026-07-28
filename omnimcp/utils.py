@@ -2,19 +2,20 @@
 
 """Minimal utilities needed for OmniMCP."""
 
-from functools import wraps
-from io import BytesIO
-from typing import Any, Callable, List, Tuple, Union, Optional
 import base64
 import sys
+import textwrap
 import threading
 import time
-import textwrap
+from collections.abc import Callable
+from functools import wraps
+from io import BytesIO
+from typing import Any
 
+import mss
 from jinja2 import Environment, Template
 from loguru import logger
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
-import mss
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
 if sys.platform == "darwin":
     try:
@@ -27,7 +28,7 @@ if sys.platform == "darwin":
 else:
     NSScreen = None  # Define as None on other platforms
 
-from .types import UIElement, LLMActionPlan
+from .types import LLMActionPlan, UIElement
 
 # Process-local storage for MSS instances
 _process_local = threading.local()
@@ -53,7 +54,7 @@ def take_screenshot() -> Image.Image:
     return image
 
 
-def get_monitor_dims() -> Tuple[int, int]:
+def get_monitor_dims() -> tuple[int, int]:
     """Get the dimensions reported by mss for the primary monitor."""
     # This might return logical points or physical pixels depending on backend/OS.
     # The scaling factor helps bridge the gap regardless.
@@ -67,7 +68,7 @@ def get_monitor_dims() -> Tuple[int, int]:
     return dims
 
 
-def image_to_base64(image: Union[str, Image.Image]) -> str:
+def image_to_base64(image: str | Image.Image) -> str:
     """Convert image to base64 string.
 
     Args:
@@ -97,7 +98,7 @@ def log_action(func: Callable) -> Callable:
             logger.debug(f"{func.__name__} completed in {duration:.2f}ms")
             return result
         except Exception as e:
-            logger.error(f"{func.__name__} failed: {str(e)}")
+            logger.error(f"{func.__name__} failed: {e!s}")
             raise
 
     return wrapper
@@ -108,9 +109,9 @@ def denormalize_coordinates(
     norm_y: float,
     screen_w: int,
     screen_h: int,  # These are PHYSICAL PIXEL dimensions of the screenshot
-    norm_w: Optional[float] = None,
-    norm_h: Optional[float] = None,
-) -> Tuple[int, int]:
+    norm_w: float | None = None,
+    norm_h: float | None = None,
+) -> tuple[int, int]:
     """
     Convert normalized coordinates (relative to screenshot) to
     ABSOLUTE PHYSICAL PIXEL coordinates.
@@ -132,7 +133,7 @@ def denormalize_coordinates(
 
 def normalize_coordinates(
     x: int, y: int, screen_w: int, screen_h: int
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     if screen_w <= 0 or screen_h <= 0:
         logger.warning(
             f"Invalid screen dimensions ({screen_w}x{screen_h}), cannot normalize."
@@ -143,7 +144,7 @@ def normalize_coordinates(
     return norm_x, norm_y
 
 
-def get_scale_ratios() -> Tuple[float, float]:
+def get_scale_ratios() -> tuple[float, float]:
     """Get the scale ratios between actual screen dimensions and image dimensions.
 
     Handles high DPI/Retina displays where screenshot dimensions may differ from
@@ -172,7 +173,7 @@ def get_scale_ratios() -> Tuple[float, float]:
     return width_ratio, height_ratio
 
 
-def screen_to_image_coords(x: int, y: int) -> Tuple[int, int]:
+def screen_to_image_coords(x: int, y: int) -> tuple[int, int]:
     """Convert screen coordinates to image coordinates.
 
     Args:
@@ -188,7 +189,7 @@ def screen_to_image_coords(x: int, y: int) -> Tuple[int, int]:
     return image_x, image_y
 
 
-def image_to_screen_coords(x: int, y: int) -> Tuple[int, int]:
+def image_to_screen_coords(x: int, y: int) -> tuple[int, int]:
     """Convert image coordinates to screen coordinates.
 
     Args:
@@ -309,7 +310,7 @@ def create_prompt_template(template_str: str) -> Template:
     return env.from_string(template_str)
 
 
-def render_prompt(template: Union[Template, str], **kwargs: Any) -> str:
+def render_prompt(template: Template | str, **kwargs: Any) -> str:
     """Create and render a prompt template in one step.
 
     Args:
@@ -342,7 +343,7 @@ def render_prompt(template: Union[Template, str], **kwargs: Any) -> str:
 
 def draw_bounding_boxes(
     image: Image.Image,
-    elements: List["UIElement"],
+    elements: list["UIElement"],
     color: str = "red",
     width: int = 1,
     show_ids: bool = True,
@@ -373,7 +374,7 @@ def draw_bounding_boxes(
             # font = ImageFont.truetype("arial.ttf", 12) # Might fail if not installed
             font_size = 12
             font = ImageFont.load_default(size=font_size)
-        except IOError:
+        except OSError:
             logger.warning(
                 "Default font not found for drawing IDs. Using basic PIL font."
             )
@@ -457,7 +458,7 @@ def get_scaling_factor() -> int:
 try:
     # Adjust size as needed
     ACTION_FONT = ImageFont.truetype("arial.ttf", 14)
-except IOError:
+except OSError:
     logger.warning("Arial font not found for highlighting. Using default PIL font.")
     ACTION_FONT = ImageFont.load_default()
 
@@ -470,7 +471,7 @@ def draw_action_highlight(
     width: int = 3,
     dim_factor: float = 0.5,
     text_color: str = "black",
-    text_bg_color: Tuple[int, int, int, int] = (255, 255, 255, 200),  # White with alpha
+    text_bg_color: tuple[int, int, int, int] = (255, 255, 255, 200),  # White with alpha
 ) -> Image.Image:
     """
     Draws highlight box, dims background, and adds text annotation for the planned action,

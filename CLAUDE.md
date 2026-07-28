@@ -40,15 +40,18 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("omnimcp")
 
+
 @mcp.tool()
 async def get_screen_state() -> ScreenState:
     """Get current state of visible UI elements"""
-    
+
+
 @mcp.tool()
 async def click_element(description: str) -> ClickResult:
     """Click UI element matching description"""
 
-@mcp.tool() 
+
+@mcp.tool()
 async def type_text(text: str) -> TypeResult:
     """Type text"""
 ```
@@ -118,11 +121,13 @@ class UIElement:
     bounds: Bounds
     confidence: float
 
+
 @dataclass
 class ScreenState:
     elements: List[UIElement]
     dimensions: tuple[int, int]
     timestamp: float
+
 
 @dataclass
 class ActionResult:
@@ -268,9 +273,9 @@ class ActionVerification:
     changes_detected: List[BoundingBox]
     confidence: float
 
+
 async def verify_tool_execution(
-    action_result: ActionResult,
-    verification: ActionVerification
+    action_result: ActionResult, verification: ActionVerification
 ) -> bool:
     """Verify tool executed successfully"""
 ```
@@ -345,19 +350,20 @@ class VisualState:
 ```python
 class OmniParserClient:
     """Client for interacting with the OmniParser API."""
-    
+
     def parse_image(self, image: Image.Image) -> Dict[str, Any]:
         """Parse an image using the OmniParser service."""
-        
+
     def check_server_available(self) -> bool:
         """Check if the OmniParser server is available."""
 
+
 class OmniParserProvider:
     """Provider for OmniParser services with deployment capabilities."""
-    
+
     def deploy(self) -> bool:
         """Deploy OmniParser if not already running."""
-    
+
     def is_available(self) -> bool:
         """Check if parser is available."""
 ```
@@ -381,17 +387,14 @@ class InputController:
 ```python
 class ClaudeVision:
     """Handles visual analysis using Claude."""
-    
+
     async def describe_elements(
-        elements: List[Element],
-        context: Optional[Image] = None
+        elements: List[Element], context: Optional[Image] = None
     ) -> List[str]:
         """Get detailed descriptions of UI elements."""
-        
+
     async def analyze_visual_query(
-        query: str,
-        screenshot: Image,
-        elements: List[Element]
+        query: str, screenshot: Image, elements: List[Element]
     ) -> Dict:
         """Answer questions about UI using Claude's vision."""
 ```
@@ -735,19 +738,19 @@ def generate_action_test_pair(action_type="click"):
     before_img, elements = generate_test_ui()
     after_img = before_img.copy()
     after_draw = ImageDraw.Draw(after_img)
-    
+
     if action_type == "click":
         # Show button in pressed state
-        after_draw.rectangle([(100, 100), (200, 150)], fill='darkblue', outline='black')
+        after_draw.rectangle([(100, 100), (200, 150)], fill="darkblue", outline="black")
         after_draw.text((110, 115), "Submit", fill="white")
         # Add success message
         after_draw.text((100, 170), "Form submitted!", fill="green")
-    
+
     elif action_type == "type":
         # Show text entered in field
-        after_draw.rectangle([(300, 100), (500, 150)], fill='white', outline='black')
+        after_draw.rectangle([(300, 100), (500, 150)], fill="white", outline="black")
         after_draw.text((310, 115), "testuser", fill="black")
-    
+
     return before_img, after_img, elements
 ```
 
@@ -760,12 +763,12 @@ async def test_element_finding():
     """Test Claude's ability to find elements in synthetic UI."""
     # Generate test image with known elements
     test_img, elements = generate_test_ui()
-    
+
     # Mock screenshot capture to return test image
-    with patch('omnimcp.utils.take_screenshot', return_value=test_img):
+    with patch("omnimcp.utils.take_screenshot", return_value=test_img):
         # Setup OmniMCP with mock parser that returns our elements
-        # ... 
-        
+        # ...
+
         # Test with various descriptions
         descriptions = [
             "submit button",
@@ -773,7 +776,7 @@ async def test_element_finding():
             "the username field",
             "textbox in the middle",
         ]
-        
+
         for desc in descriptions:
             # Call find_element with each description
             element = await mcp._visual_state.find_element(desc)

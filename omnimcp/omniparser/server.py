@@ -3,19 +3,19 @@
 """Deployment module for OmniParser on AWS EC2 with on-demand startup and ALARM-BASED auto-shutdown."""
 
 import datetime
+import io
+import json
 import os
 import subprocess
 import time
-import json
-import io
 import zipfile
-from typing import Tuple  # Added for type hinting consistency
+from collections.abc import Sequence
 
-from botocore.exceptions import ClientError
-from loguru import logger
 import boto3
 import fire
 import paramiko
+from botocore.exceptions import ClientError
+from loguru import logger
 
 # Assuming config is imported correctly from omnimcp.config
 from omnimcp.config import config
@@ -68,8 +68,17 @@ def create_key_pair(
             return None
 
 
-def get_or_create_security_group_id(ports: list[int] = [22, config.PORT]) -> str | None:
+# Evaluated once at import, exactly as the old mutable default argument was,
+# but as an immutable tuple so a caller cannot mutate every later call's default.
+_DEFAULT_SECURITY_GROUP_PORTS: tuple[int, ...] = (22, config.PORT)
+
+
+def get_or_create_security_group_id(
+    ports: Sequence[int] | None = None,
+) -> str | None:
     """Get existing security group or create a new one."""
+    if ports is None:
+        ports = _DEFAULT_SECURITY_GROUP_PORTS
     ec2_client = boto3.client("ec2", region_name=config.AWS_REGION)
     sg_name = config.AWS_EC2_SECURITY_GROUP
 
@@ -169,7 +178,7 @@ def deploy_ec2_instance(
     project_name: str = config.PROJECT_NAME,
     key_name: str = config.AWS_EC2_KEY_NAME,
     disk_size: int = config.AWS_EC2_DISK_SIZE,
-) -> Tuple[str | None, str | None]:
+) -> tuple[str | None, str | None]:
     """
     Deploy a new EC2 instance or start/return an existing usable one.
     Ignores instances that are shutting-down or terminated.
@@ -208,9 +217,7 @@ def deploy_ec2_instance(
         )
 
         # Find the most recently launched instance in a usable state
-        sorted_instances = sorted(
-            list(instances), key=lambda i: i.launch_time, reverse=True
-        )
+        sorted_instances = sorted(instances, key=lambda i: i.launch_time, reverse=True)
 
         if sorted_instances:
             candidate_instance = sorted_instances[0]
@@ -551,7 +558,7 @@ def execute_command(
     max_retries: int = 20,
     retry_delay: int = 10,
     timeout: int = config.COMMAND_TIMEOUT,  # Use timeout from config
-) -> Tuple[int, str, str]:  # Return status, stdout, stderr
+) -> tuple[int, str, str]:  # Return status, stdout, stderr
     """Execute a command via SSH with retries for specific errors."""
     logger.info(
         f"Executing SSH command: {command[:100]}{'...' if len(command) > 100 else ''}"
@@ -560,7 +567,7 @@ def execute_command(
     while attempt < max_retries:
         attempt += 1
         try:
-            stdin, stdout, stderr = ssh_client.exec_command(
+            _stdin, stdout, stderr = ssh_client.exec_command(
                 command,
                 timeout=timeout,
                 get_pty=False,  # Try without PTY first
@@ -980,7 +987,7 @@ class Deploy:
     """Class handling deployment operations for OmniParser."""
 
     @staticmethod
-    def start() -> Tuple[str | None, str | None]:  # Added return type hint
+    def start() -> tuple[str | None, str | None]:  # Added return type hint
         """
         Start or configure EC2 instance, setup auto-shutdown, deploy OmniParser container.
         Returns the public IP and instance ID on success, or (None, None) on failure.
@@ -1513,13 +1520,16 @@ class Deploy:
                         "echo 'SSH connection successful'",
                     ]
                     result = subprocess.run(
-                        test_ssh_cmd, capture_output=True, text=True
+                        test_ssh_cmd, capture_output=True, text=True, check=False
                     )
                     if result.returncode == 0:
                         logger.info("Instance is ready for SSH connections")
                         return
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Expected while the instance is still booting; keep
+                    # retrying, but do not swallow it silently -- a
+                    # misconfigured key path looked identical to "not up yet".
+                    logger.debug(f"SSH readiness probe failed: {e}")
 
                 time.sleep(10)  # Wait 10 seconds between attempts
 
@@ -1573,7 +1583,7 @@ class Deploy:
         logger.info(f"Retrieving {days} days of deployment history...")
 
         # Calculate time range
-        end_time = datetime.datetime.now()
+        end_time = datetime.datetime.now(datetime.timezone.utc)
         start_time = end_time - datetime.timedelta(days=days)
 
         # Initialize AWS clients
@@ -1615,7 +1625,7 @@ class Deploy:
                 # Get instance console output if available
                 try:
                     console = ec2_client.get_console_output(InstanceId=instance_id)
-                    if "Output" in console and console["Output"]:
+                    if console.get("Output"):
                         logger.info("Last console output (truncated):")
                         # Show last few lines of console output
                         lines = console["Output"].strip().split("\n")
@@ -1662,7 +1672,7 @@ class Deploy:
 
                     for event in logs.get("events", []):
                         timestamp = datetime.datetime.fromtimestamp(
-                            event["timestamp"] / 1000
+                            event["timestamp"] / 1000, tz=datetime.timezone.utc
                         )
                         message = event["message"]
                         logger.info(f"  {timestamp}: {message}")

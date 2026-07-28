@@ -1,21 +1,21 @@
 # omnimcp/omniparser/mapper.py
 
-from typing import List, Dict, Any  # Added Any
+from typing import Any  # Added Any
 
 from loguru import logger
 
 # Assuming types are imported correctly
-from omnimcp.types import UIElement, Bounds  # Assuming Bounds is tuple (x,y,w,h)
+from omnimcp.types import Bounds, UIElement  # Assuming Bounds is tuple (x,y,w,h)
 
 
 def map_omniparser_to_uielements(
-    parser_json: Dict, img_width: int, img_height: int
-) -> List[UIElement]:
+    parser_json: dict, img_width: int, img_height: int
+) -> list[UIElement]:
     """Converts raw OmniParser JSON output to a list of UIElement objects."""
-    elements: List[UIElement] = []
+    elements: list[UIElement] = []
     element_id_counter = 0
     # Adjust key if needed based on actual OmniParser output schema
-    raw_elements: List[Dict[str, Any]] = parser_json.get("parsed_content_list", [])
+    raw_elements: list[dict[str, Any]] = parser_json.get("parsed_content_list", [])
 
     if not isinstance(raw_elements, list):
         logger.error(

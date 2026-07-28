@@ -2,13 +2,13 @@
 
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Tuple, Literal
+from typing import Any, Literal
 
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 # Define Bounds (assuming normalized coordinates 0.0-1.0)
-Bounds = Tuple[float, float, float, float]  # (x, y, width, height)
+Bounds = tuple[float, float, float, float]  # (x, y, width, height)
 
 
 # --- Core Data Structures (Using Dataclasses as provided) ---
@@ -24,9 +24,9 @@ class UIElement:
     content: str  # Text content or accessibility label
     bounds: Bounds  # Normalized coordinates (x, y, width, height)
     confidence: float = 1.0
-    attributes: Dict[str, Any] = field(default_factory=dict)  # e.g., {'checked': False}
+    attributes: dict[str, Any] = field(default_factory=dict)  # e.g., {'checked': False}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert UIElement to a dictionary."""
         return {
             "id": self.id,
@@ -67,8 +67,8 @@ class UIElement:
 class ScreenState:
     """Represents the raw state of the screen at a point in time."""
 
-    elements: List[UIElement]
-    dimensions: Tuple[int, int]  # Actual pixel dimensions
+    elements: list[UIElement]
+    dimensions: tuple[int, int]  # Actual pixel dimensions
     timestamp: float
 
 
@@ -82,7 +82,7 @@ class ActionVerification:
     success: bool
     before_state: bytes  # Screenshot bytes
     after_state: bytes  # Screenshot bytes
-    changes_detected: List[Bounds]  # Regions where changes occurred
+    changes_detected: list[Bounds]  # Regions where changes occurred
     confidence: float
 
 
@@ -91,10 +91,10 @@ class InteractionResult:
     """Generic result of an interaction attempt."""
 
     success: bool
-    element: Optional[UIElement]  # The element interacted with, if applicable
-    error: Optional[str] = None
-    context: Dict[str, Any] = field(default_factory=dict)
-    verification: Optional[ActionVerification] = None
+    element: UIElement | None  # The element interacted with, if applicable
+    error: str | None = None
+    context: dict[str, Any] = field(default_factory=dict)
+    verification: ActionVerification | None = None
 
 
 @dataclass
@@ -119,10 +119,10 @@ class ToolError:
     """Rich error information, potentially for MCP tools or agent errors."""
 
     message: str
-    visual_context: Optional[bytes]  # Screenshot bytes
+    visual_context: bytes | None  # Screenshot bytes
     attempted_action: str
     element_description: str  # Description or ID of intended target
-    recovery_suggestions: List[str]
+    recovery_suggestions: list[str]
 
 
 @dataclass
@@ -130,11 +130,11 @@ class DebugContext:
     """Context for debugging a specific operation or tool call."""
 
     tool_name: str
-    inputs: Dict[str, Any]
+    inputs: dict[str, Any]
     result: Any
     duration: float
-    visual_state: Optional[ScreenState]  # Raw screen state at the time
-    error: Optional[Dict] = None  # e.g., ToolError as dict
+    visual_state: ScreenState | None  # Raw screen state at the time
+    error: dict | None = None  # e.g., ToolError as dict
 
     def save_snapshot(self, path: str) -> None:
         """Save debug snapshot for analysis."""
@@ -161,22 +161,22 @@ class LLMActionPlan(BaseModel):
         ...,
         description="Set to true if the user's overall goal is fully achieved by the current state, false otherwise.",
     )
-    element_id: Optional[int] = Field(
+    element_id: int | None = Field(
         default=None,
         description="The per-frame ID of the target UI element IF the action is 'click' or 'type' and goal is not complete. Must be null otherwise.",
     )
-    text_to_type: Optional[str] = Field(
+    text_to_type: str | None = Field(
         default=None,
         description="Text to type IF action is 'type' and goal is not complete. Must be null otherwise.",
     )
-    key_info: Optional[str] = Field(
+    key_info: str | None = Field(
         default=None,
         description="Key or shortcut to press IF action is 'press_key' and goal is not complete (e.g., 'Enter', 'Cmd+Space'). Must be null otherwise.",
     )
 
     @field_validator("element_id")
     @classmethod
-    def check_element_id(cls, v: Optional[int], info: ValidationInfo) -> Optional[int]:
+    def check_element_id(cls, v: int | None, info: ValidationInfo) -> int | None:
         # Skip validation if goal is already complete
         if info.data.get("is_goal_complete", False):
             return v
@@ -194,9 +194,7 @@ class LLMActionPlan(BaseModel):
 
     @field_validator("text_to_type")
     @classmethod
-    def check_text_to_type(
-        cls, v: Optional[str], info: ValidationInfo
-    ) -> Optional[str]:
+    def check_text_to_type(cls, v: str | None, info: ValidationInfo) -> str | None:
         if info.data.get("is_goal_complete", False):
             return v
         action = info.data.get("action")
@@ -212,7 +210,7 @@ class LLMActionPlan(BaseModel):
 
     @field_validator("key_info")
     @classmethod
-    def check_key_info(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+    def check_key_info(cls, v: str | None, info: ValidationInfo) -> str | None:
         if info.data.get("is_goal_complete", False):
             return v
         action = info.data.get("action")
@@ -237,7 +235,7 @@ class ElementTrack(BaseModel):
         description="Persistent tracking ID assigned by the tracker (e.g., 'track_0')"
     )
     # Storing Optional[UIElement] (dataclass) directly in Pydantic model works
-    latest_element: Optional[UIElement] = Field(
+    latest_element: UIElement | None = Field(
         None,
         description="The UIElement dataclass instance detected in the current frame, if any.",
     )
@@ -270,19 +268,19 @@ class ScreenAnalysis(BaseModel):
     reasoning: str = Field(
         description="Detailed reasoning about the UI state, changes, and tracked elements relevant to the goal."
     )
-    disappeared_elements: List[str] = Field(
+    disappeared_elements: list[str] = Field(
         default_factory=list,
         description="List of track_ids considered permanently gone.",
     )
-    temporarily_missing_elements: List[str] = Field(
+    temporarily_missing_elements: list[str] = Field(
         default_factory=list,
         description="List of track_ids considered temporarily missing but likely to reappear.",
     )
-    new_elements: List[str] = Field(
+    new_elements: list[str] = Field(
         default_factory=list,
         description="List of track_ids for newly appeared elements.",
     )
-    critical_elements_status: Dict[str, str] = Field(
+    critical_elements_status: dict[str, str] = Field(
         default_factory=dict,
         description="Status (e.g., 'Visible', 'Missing', 'Gone') of track_ids deemed critical for the current goal/step.",
     )
@@ -297,11 +295,11 @@ class ActionDecision(BaseModel):
     action_type: str = Field(
         description="The type of action to perform (e.g., 'click', 'type', 'press_key', 'wait', 'finish')."
     )
-    target_element_id: Optional[int] = Field(
+    target_element_id: int | None = Field(
         None,
         description="The CURRENT per-frame 'id' of the target UIElement, if applicable and visible.",
     )
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Action parameters, e.g., {'text_to_type': 'hello', 'key_info': 'Enter'}",
     )
@@ -319,31 +317,31 @@ class LoggedStep(BaseModel):
     step_index: int
     timestamp: float = Field(default_factory=time.time)
     goal: str
-    screenshot_path: Optional[str] = None  # Relative path within run dir
+    screenshot_path: str | None = None  # Relative path within run dir
 
     # Inputs to Planner
     input_elements_count: int
     # Store list of dicts for JSON serialization compatibility
-    tracking_context: Optional[List[Dict]] = Field(
+    tracking_context: list[dict] | None = Field(
         None, description="Snapshot of ElementTrack data (as dicts) provided to LLM"
     )
-    action_history_at_step: List[str]
+    action_history_at_step: list[str]
 
     # Planner Outputs (Store as dicts)
-    llm_analysis: Optional[Dict] = Field(
+    llm_analysis: dict | None = Field(
         None, description="ScreenAnalysis output from LLM"
     )
-    llm_decision: Optional[Dict] = Field(
+    llm_decision: dict | None = Field(
         None, description="ActionDecision output from LLM"
     )
-    raw_llm_action_plan: Optional[Dict] = Field(
+    raw_llm_action_plan: dict | None = Field(
         None, description="LLMActionPlan if ActionDecision not yet implemented"
     )
 
     # Execution
     executed_action: str
-    executed_target_element_id: Optional[int] = None
-    executed_parameters: Dict[str, Any]
+    executed_target_element_id: int | None = None
+    executed_parameters: dict[str, Any]
     action_success: bool
 
     # Metrics

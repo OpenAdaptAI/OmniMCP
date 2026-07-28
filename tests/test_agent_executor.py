@@ -1,28 +1,27 @@
 # tests/test_agent_executor.py
 
 import os
-from typing import List, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
 
+from omnimcp import agent_executor
 from omnimcp.agent_executor import (
     AgentExecutor,
-    PerceptionInterface,
     ExecutionInterface,
+    PerceptionInterface,
     PlannerCallable,
 )
-from omnimcp import agent_executor
 from omnimcp.types import LLMActionPlan, UIElement
 
 
 class MockPerception(PerceptionInterface):
     def __init__(
         self,
-        elements: List[UIElement],
-        dims: Optional[Tuple[int, int]],
-        image: Optional[Image.Image],
+        elements: list[UIElement],
+        dims: tuple[int, int] | None,
+        image: Image.Image | None,
     ):
         self.elements = elements
         self.screen_dimensions = dims
@@ -42,23 +41,23 @@ class MockPerception(PerceptionInterface):
 class MockExecution(ExecutionInterface):
     def __init__(self):
         self.calls = []
-        self.fail_on_action: Optional[str] = None  # e.g., "click" to make click fail
+        self.fail_on_action: str | None = None  # e.g., "click" to make click fail
 
     def click(self, x: int, y: int, click_type: str = "single") -> bool:
         self.calls.append(("click", x, y, click_type))
-        return not (self.fail_on_action == "click")
+        return self.fail_on_action != "click"
 
     def type_text(self, text: str) -> bool:
         self.calls.append(("type_text", text))
-        return not (self.fail_on_action == "type")
+        return self.fail_on_action != "type"
 
     def execute_key_string(self, key_info_str: str) -> bool:
         self.calls.append(("execute_key_string", key_info_str))
-        return not (self.fail_on_action == "press_key")
+        return self.fail_on_action != "press_key"
 
     def scroll(self, dx: int, dy: int) -> bool:
         self.calls.append(("scroll", dx, dy))
-        return not (self.fail_on_action == "scroll")
+        return self.fail_on_action != "scroll"
 
 
 # --- Pytest Fixtures ---
@@ -110,8 +109,8 @@ def planner_completes_on_step(n: int) -> PlannerCallable:
     """Factory for a planner that completes on step index `n`."""
 
     def mock_planner(
-        elements: List[UIElement], user_goal: str, action_history: List[str], step: int
-    ) -> Tuple[LLMActionPlan, Optional[UIElement]]:
+        elements: list[UIElement], user_goal: str, action_history: list[str], step: int
+    ) -> tuple[LLMActionPlan, UIElement | None]:
         target_element = elements[0] if elements else None
         is_complete = step == n
         action = "click" if not is_complete else "press_key"  # Vary action
@@ -134,8 +133,8 @@ def planner_never_completes() -> PlannerCallable:
     """Planner that never signals goal completion."""
 
     def mock_planner(
-        elements: List[UIElement], user_goal: str, action_history: List[str], step: int
-    ) -> Tuple[LLMActionPlan, Optional[UIElement]]:
+        elements: list[UIElement], user_goal: str, action_history: list[str], step: int
+    ) -> tuple[LLMActionPlan, UIElement | None]:
         target_element = elements[0] if elements else None
         element_id = target_element.id if target_element else None
         plan = LLMActionPlan(

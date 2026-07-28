@@ -2,7 +2,7 @@
 
 import sys
 import time
-from typing import List, Literal, Optional
+from typing import Literal
 
 import numpy as np
 from loguru import logger
@@ -14,22 +14,22 @@ from PIL import Image
 # Imports needed by OmniMCP class and its tools
 from omnimcp.config import config  # Import config to read URL
 from omnimcp.input import InputController
-from omnimcp.utils import compute_diff, denormalize_coordinates
-from omnimcp.types import (
-    Bounds,
-    UIElement,
-    ScreenState,
-    ActionVerification,
-    InteractionResult,
-    ScrollResult,
-    TypeResult,
-)
-
-# Import VisualState from its new location
-from omnimcp.visual_state import VisualState
 
 # Import parser client as it's needed to init VisualState here
 from omnimcp.omniparser.client import OmniParserClient
+from omnimcp.types import (
+    ActionVerification,
+    Bounds,
+    InteractionResult,
+    ScreenState,
+    ScrollResult,
+    TypeResult,
+    UIElement,
+)
+from omnimcp.utils import compute_diff, denormalize_coordinates
+
+# Import VisualState from its new location
+from omnimcp.visual_state import VisualState
 
 
 class OmniMCP:
@@ -130,26 +130,31 @@ class OmniMCP:
             return f"Found {element.type} with content '{element.content}' at bounds {element.bounds}"
 
         @self.mcp.tool()
-        def find_elements(query: str, max_results: int = 5) -> List[UIElement]:
+        def find_elements(query: str, max_results: int = 5) -> list[UIElement]:
             """Find elements matching natural query (Basic implementation)."""
             logger.info(f"MCP Tool: find_elements '{query}' (max: {max_results})")
             self._visual_state.update()
             # TODO: Enhance matching logic (e.g., vector search, LLM).
             matching_elements = []
             for element in self._visual_state.elements:
-                if element.content and any(
-                    word in element.content.lower()
-                    for word in query.lower().split()
-                    if word
+                if (
+                    element.content
+                    and any(
+                        word in element.content.lower()
+                        for word in query.lower().split()
+                        if word
+                    )
+                    or (
+                        element.type
+                        and any(
+                            word in element.type.lower()
+                            for word in query.lower().split()
+                            if word
+                        )
+                        and element not in matching_elements
+                    )
                 ):
                     matching_elements.append(element)
-                elif element.type and any(
-                    word in element.type.lower()
-                    for word in query.lower().split()
-                    if word
-                ):
-                    if element not in matching_elements:
-                        matching_elements.append(element)
                 if len(matching_elements) >= max_results:
                     break
             logger.info(
@@ -253,7 +258,7 @@ class OmniMCP:
             )
 
         @self.mcp.tool()
-        def type_text(text: str, target: Optional[str] = None) -> TypeResult:
+        def type_text(text: str, target: str | None = None) -> TypeResult:
             """
             Type text. If target description is provided, updates state, finds/clicks
             the target first. Otherwise, types immediately assuming focus is correct.
@@ -379,11 +384,11 @@ class OmniMCP:
     # _verify_action is kept as a helper, though not called by default tools now
     def _verify_action(
         self,
-        before_image: Optional[Image.Image],
-        after_image: Optional[Image.Image],
-        element_bounds: Optional[Bounds] = None,
-        action_description: Optional[str] = None,
-    ) -> Optional[ActionVerification]:
+        before_image: Image.Image | None,
+        after_image: Image.Image | None,
+        element_bounds: Bounds | None = None,
+        action_description: str | None = None,
+    ) -> ActionVerification | None:
         """Verify action success using basic pixel difference."""
         # TODO: Refactor verification logic: Consider moving to a dedicated verification module, improving the diff algorithm (e.g., structural diff), or making verification optional via config due to performance impact and current basic implementation.
         logger.debug("MCP Tool: Verifying action using pixel difference...")

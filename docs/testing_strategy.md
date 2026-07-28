@@ -21,16 +21,18 @@ def setup_virtual_display():
     """Setup virtual display for UI testing."""
     try:
         from pyvirtualdisplay import Display
+
         display = Display(visible=0, size=(1280, 1024))
         display.start()
-        
+
         # Use a headless browser
         from selenium import webdriver
+
         options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
+        options.add_argument("--headless")
         driver = webdriver.Chrome(options=options)
         driver.get("http://localhost:8080/testpage.html")
-        
+
         return display, driver
     except ImportError:
         # Handle platforms without Xvfb support
@@ -55,18 +57,18 @@ Generate test images programmatically with known UI elements:
 def create_test_images():
     """Generate synthetic UI test images."""
     from PIL import Image, ImageDraw, ImageFont
-    
+
     # Before image with button
-    before = Image.new('RGB', (800, 600), color='white')
+    before = Image.new("RGB", (800, 600), color="white")
     draw = ImageDraw.Draw(before)
-    draw.rectangle([(100, 100), (250, 150)], fill='blue')
+    draw.rectangle([(100, 100), (250, 150)], fill="blue")
     draw.text((125, 115), "Test Button", fill="white")
-    
+
     # After image with success message
     after = before.copy()
     draw = ImageDraw.Draw(after)
     draw.text((100, 170), "Success! Button was clicked.", fill="green")
-    
+
     return before, after
 ```
 
@@ -89,27 +91,29 @@ Mock the screenshot and parsing components to return predefined data:
 def mock_visual_pipeline():
     """Patch the visual pipeline components for testing."""
     patches = []
-    
+
     # Mock screenshot function
     before_img, after_img = create_test_images()
     mock_screenshot = MagicMock(return_value=before_img)
-    patches.append(patch('omnimcp.utils.take_screenshot', mock_screenshot))
-    
+    patches.append(patch("omnimcp.utils.take_screenshot", mock_screenshot))
+
     # Create predefined elements
     test_elements = [
         {
             "type": "button",
             "content": "Test Button",
             "bounds": {"x": 100, "y": 100, "width": 150, "height": 50},
-            "confidence": 1.0
+            "confidence": 1.0,
         }
     ]
-    
+
     # Mock parser
     mock_parser = MagicMock()
     mock_parser.parse_image.return_value = {"parsed_content_list": test_elements}
-    patches.append(patch('omnimcp.omniparser.client.OmniParserClient', return_value=mock_parser))
-    
+    patches.append(
+        patch("omnimcp.omniparser.client.OmniParserClient", return_value=mock_parser)
+    )
+
     return patches
 ```
 
@@ -184,32 +188,23 @@ def get_test_environment():
     """Determine test environment and return appropriate testing setup."""
     is_ci = os.environ.get("CI", "0") == "1"
     platform = sys.platform
-    
+
     if is_ci:
         # In CI, use synthetic images
         return {
             "type": "synthetic",
             "images": create_test_images(),
-            "elements": create_test_elements()
+            "elements": create_test_elements(),
         }
     elif platform == "darwin":  # macOS
         # On macOS developer machine, use real UI
-        return {
-            "type": "real",
-            "setup": lambda: start_test_app()
-        }
+        return {"type": "real", "setup": lambda: start_test_app()}
     elif platform == "win32":  # Windows
         # On Windows, use headless browser
-        return {
-            "type": "headless",
-            "setup": lambda: setup_headless_browser()
-        }
+        return {"type": "headless", "setup": lambda: setup_headless_browser()}
     else:  # Linux or other
         # On Linux, use Xvfb
-        return {
-            "type": "xvfb",
-            "setup": lambda: setup_virtual_display()
-        }
+        return {"type": "xvfb", "setup": lambda: setup_virtual_display()}
 ```
 
 **Pros:**

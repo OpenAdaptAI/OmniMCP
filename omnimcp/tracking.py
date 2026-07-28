@@ -1,9 +1,7 @@
 # omnimcp/tracking.py
-from typing import List, Dict, Optional, Tuple
 
 # Use typing_extensions for Self if needed for older Python versions
 # from typing_extensions import Self
-
 # Added Scipy for matching
 import numpy as np
 
@@ -24,7 +22,7 @@ except ImportError:
 
 # Assuming UIElement and ElementTrack are defined in omnimcp.types
 try:
-    from omnimcp.types import UIElement, ElementTrack, Bounds
+    from omnimcp.types import Bounds, ElementTrack, UIElement
 except ImportError:
     print("Warning: Could not import types from omnimcp.types")
     UIElement = dict  # type: ignore
@@ -39,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 # Helper Function (can stay here or move to utils)
-def _get_bounds_center(bounds: Bounds) -> Optional[Tuple[float, float]]:
+def _get_bounds_center(bounds: Bounds) -> tuple[float, float] | None:
     """Calculate the center (relative coords) of a bounding box."""
     if not isinstance(bounds, (list, tuple)) or len(bounds) != 4:
         logger.warning(
@@ -76,7 +74,7 @@ class SimpleElementTracker:
                 "Scipy is required for SimpleElementTracker matching logic but not installed."
             )
             # raise ImportError("Scipy is required for SimpleElementTracker")
-        self.tracked_elements: Dict[str, ElementTrack] = {}  # track_id -> ElementTrack
+        self.tracked_elements: dict[str, ElementTrack] = {}  # track_id -> ElementTrack
         self.next_track_id_counter: int = 0
         self.miss_threshold = miss_threshold
         # Store squared threshold for efficiency
@@ -91,7 +89,7 @@ class SimpleElementTracker:
         self.next_track_id_counter += 1
         return track_id
 
-    def _match_elements(self, current_elements: List[UIElement]) -> Dict[int, str]:
+    def _match_elements(self, current_elements: list[UIElement]) -> dict[int, str]:
         """
         Performs optimal assignment matching between current elements and active tracks.
 
@@ -175,10 +173,10 @@ class SimpleElementTracker:
         for i in range(num_current):
             for j in range(num_tracks):
                 # Infinite cost if types don't match
-                if current_types[i] != track_types[j]:
-                    cost_matrix[i, j] = infinity_cost
-                # Infinite cost if distance exceeds threshold
-                elif cost_matrix[i, j] > self.match_threshold_sq:
+                if (
+                    current_types[i] != track_types[j]
+                    or cost_matrix[i, j] > self.match_threshold_sq
+                ):
                     cost_matrix[i, j] = infinity_cost
 
         # --- Optimal Assignment using Hungarian Algorithm ---
@@ -191,7 +189,7 @@ class SimpleElementTracker:
             return {}
 
         # --- Create Mapping from Valid Assignments ---
-        assignment_mapping: Dict[int, str] = {}  # current_element_id -> track_id
+        assignment_mapping: dict[int, str] = {}  # current_element_id -> track_id
         valid_matches_count = 0
         for r, c in zip(row_ind, col_ind):
             # Check if the assignment cost is valid (not infinity)
@@ -205,8 +203,8 @@ class SimpleElementTracker:
         return assignment_mapping
 
     def update(
-        self, current_elements: List[UIElement], frame_number: int
-    ) -> List[ElementTrack]:
+        self, current_elements: list[UIElement], frame_number: int
+    ) -> list[ElementTrack]:
         """
         Updates tracks based on current detections using optimal assignment matching.
 
@@ -225,7 +223,7 @@ class SimpleElementTracker:
         matched_current_element_ids = set(assignment_mapping.keys())
         matched_track_ids = set(assignment_mapping.values())
 
-        tracks_to_prune: List[str] = []
+        tracks_to_prune: list[str] = []
         # Update existing tracks based on matches
         for track_id, track in self.tracked_elements.items():
             if track_id in matched_track_ids:

@@ -45,17 +45,17 @@ def run(
     # Delay imports to avoid credential checks at import time
     try:
         # Import necessary components from the project
-        from omnimcp.config import config
-        from omnimcp.input import InputController, _pynput_error
         from omnimcp.agent_executor import AgentExecutor
+        from omnimcp.config import config
         from omnimcp.core import plan_action_for_ui
+        from omnimcp.input import InputController, _pynput_error
         from omnimcp.omniparser.client import OmniParserClient
-        from omnimcp.visual_state import VisualState
         from omnimcp.utils import (
-            draw_bounding_boxes,
-            draw_action_highlight,
             NSScreen,  # Check for AppKit on macOS
+            draw_action_highlight,
+            draw_bounding_boxes,
         )
+        from omnimcp.visual_state import VisualState
     except ImportError as e:
         logger.critical(f"Required dependency not found: {e}")
         return 1

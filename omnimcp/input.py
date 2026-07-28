@@ -3,7 +3,7 @@
 import os
 import sys
 import time
-from typing import Optional, Literal, List, Tuple, Dict, Any, Union
+from typing import Any, ClassVar, Literal
 
 from loguru import logger
 
@@ -34,10 +34,10 @@ else:
     _pynput_error = "Skipping pynput import in headless Linux environment (no DISPLAY)."
     logger.warning(_pynput_error)
 
-from omnimcp.utils import log_action  # noqa: E402
+from omnimcp.utils import log_action
 
 # Define Bounds type if not imported from elsewhere
-BoundsTuple = Tuple[float, float, float, float]  # (norm_x, norm_y, norm_w, norm_h)
+BoundsTuple = tuple[float, float, float, float]  # (norm_x, norm_y, norm_w, norm_h)
 
 
 class InputController:
@@ -47,7 +47,7 @@ class InputController:
     """
 
     # --- Moved _special_map_definitions to be a Class Attribute ---
-    _special_map_definitions: Dict[str, str] = {
+    _special_map_definitions: ClassVar[dict[str, str]] = {
         # Alias      : pynput Key attribute name
         "enter": "enter",
         "return": "enter",
@@ -113,7 +113,7 @@ class InputController:
         logger.info("pynput mouse and keyboard controllers initialized.")
 
         # --- Mappings referencing Class Attribute ---
-        self.MODIFIER_MAP: Dict[str, Any] = {
+        self.MODIFIER_MAP: dict[str, Any] = {
             "cmd": self.Key.cmd,
             "command": self.Key.cmd,
             "win": self.Key.cmd,
@@ -126,7 +126,7 @@ class InputController:
         logger.debug(f"Initialized MODIFIER_MAP with {len(self.MODIFIER_MAP)} keys.")
 
         # Helper to safely get key attribute
-        def _get_key(key_name: str) -> Optional[Any]:
+        def _get_key(key_name: str) -> Any | None:
             try:
                 return getattr(self.Key, key_name)
             except AttributeError:
@@ -136,7 +136,7 @@ class InputController:
                 return None
 
         # Build the instance's SPECIAL_KEY_MAP safely using the class attribute definitions
-        self.SPECIAL_KEY_MAP: Dict[str, Any] = {}
+        self.SPECIAL_KEY_MAP: dict[str, Any] = {}
         missing_keys = set()
         # Use self._special_map_definitions or InputController._special_map_definitions here
         for alias, key_name in InputController._special_map_definitions.items():
@@ -255,8 +255,8 @@ class InputController:
             part.strip().lower() for part in key_info_str.replace("-", "+").split("+")
         ]
 
-        modifiers_to_press: List[keyboard.Key] = []
-        primary_key_str: Optional[str] = None
+        modifiers_to_press: list[keyboard.Key] = []
+        primary_key_str: str | None = None
 
         # 1. Parse the string
         for part in parts:
@@ -275,7 +275,7 @@ class InputController:
                 return False
 
         # 2. Determine primary key object
-        primary_key_obj: Optional[Union[str, keyboard.Key, keyboard.KeyCode]] = None
+        primary_key_obj: str | keyboard.Key | keyboard.KeyCode | None = None
         if primary_key_str:
             if primary_key_str in self.SPECIAL_KEY_MAP:
                 primary_key_obj = self.SPECIAL_KEY_MAP[primary_key_str]

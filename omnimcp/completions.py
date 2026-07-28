@@ -2,7 +2,7 @@
 
 import json
 import time
-from typing import Dict, List, Optional, Type, TypeVar
+from typing import TypeVar
 
 import anthropic
 from pydantic import BaseModel, ValidationError
@@ -55,7 +55,7 @@ MAX_RETRIES = 3
 
 
 # --- Helper to format messages for logging ---
-def format_chat_messages(messages: List[Dict[str, str]]) -> str:
+def format_chat_messages(messages: list[dict[str, str]]) -> str:
     """Format chat messages in a readable way for logs."""
     result = []
     for msg in messages:
@@ -79,11 +79,11 @@ def format_chat_messages(messages: List[Dict[str, str]]) -> str:
     reraise=True,  # Reraise the exception after retries are exhausted
 )
 def call_llm_api(
-    messages: List[Dict[str, str]],
-    response_model: Type[T],
-    model: Optional[str] = None,  # Allow overriding config default
+    messages: list[dict[str, str]],
+    response_model: type[T],
+    model: str | None = None,  # Allow overriding config default
     temperature: float = 0.1,  # Lower temperature for more deterministic planning
-    system_prompt: Optional[str] = None,
+    system_prompt: str | None = None,
 ) -> T:
     """
     Calls the configured LLM API, expecting a JSON response conforming to the pydantic model.
@@ -163,10 +163,8 @@ def call_llm_api(
     logger.debug(f"Raw LLM response text:\n{response_text}")
 
     # Clean potential markdown code fences (common issue)
-    if response_text.startswith("```json"):
-        response_text = response_text[7:]
-    if response_text.endswith("```"):
-        response_text = response_text[:-3]
+    response_text = response_text.removeprefix("```json")
+    response_text = response_text.removesuffix("```")
     response_text = response_text.strip()
 
     # Parse and validate the JSON response using the Pydantic model

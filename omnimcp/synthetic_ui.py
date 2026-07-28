@@ -1,10 +1,11 @@
 # omnimcp/synthetic_ui.py
-import os
-from typing import List, Tuple, Any
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 import copy  # For deep copying element list
+import os
+from typing import Any
 
-from .types import UIElement, Bounds
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+
+from .types import Bounds, UIElement
 from .utils import logger
 
 # --- Constants and Font ---
@@ -12,14 +13,14 @@ IMG_WIDTH, IMG_HEIGHT = 800, 600
 try:
     FONT = ImageFont.truetype("arial.ttf", 15)
     FONT_BOLD = ImageFont.truetype("arialbd.ttf", 20)  # Added bold font
-except IOError:
+except OSError:
     logger.warning("Arial fonts not found. Using default PIL font.")
     FONT = ImageFont.load_default()
     FONT_BOLD = ImageFont.load_default()
 
 
 # --- Coordinate Conversion ---
-def _bounds_to_abs(bounds: Bounds) -> Tuple[int, int, int, int]:
+def _bounds_to_abs(bounds: Bounds) -> tuple[int, int, int, int]:
     """Convert normalized bounds to absolute pixel coordinates."""
     x, y, w, h = bounds
     abs_x = int(x * IMG_WIDTH)
@@ -29,7 +30,7 @@ def _bounds_to_abs(bounds: Bounds) -> Tuple[int, int, int, int]:
     return abs_x, abs_y, abs_w, abs_h
 
 
-def _abs_to_bounds(abs_coords: Tuple[int, int, int, int]) -> Bounds:
+def _abs_to_bounds(abs_coords: tuple[int, int, int, int]) -> Bounds:
     """Convert absolute pixel coordinates to normalized bounds."""
     abs_x, abs_y, abs_w, abs_h = abs_coords
     x = abs_x / IMG_WIDTH
@@ -44,11 +45,11 @@ def _abs_to_bounds(abs_coords: Tuple[int, int, int, int]) -> Bounds:
 
 def generate_login_screen(
     save_path: str | None = None,
-) -> Tuple[Image.Image, List[UIElement]]:
+) -> tuple[Image.Image, list[UIElement]]:
     """Generates the initial synthetic login screen image and element data."""
     img = Image.new("RGB", (IMG_WIDTH, IMG_HEIGHT), color=(230, 230, 230))
     draw = ImageDraw.Draw(img)
-    elements: List[UIElement] = []
+    elements: list[UIElement] = []
     element_id_counter = 0
 
     # Title
@@ -170,13 +171,13 @@ def generate_login_screen(
 
 def generate_logged_in_screen(
     username: str, save_path: str | None = None
-) -> Tuple[Image.Image, List[UIElement]]:
+) -> tuple[Image.Image, list[UIElement]]:
     """Generates a simple 'logged in' screen."""
     img = Image.new(
         "RGB", (IMG_WIDTH, IMG_HEIGHT), color=(210, 230, 210)
     )  # Light green background
     draw = ImageDraw.Draw(img)
-    elements: List[UIElement] = []
+    elements: list[UIElement] = []
     element_id_counter = 0  # Start fresh IDs for new screen state
 
     # Welcome Message
@@ -240,10 +241,10 @@ def generate_logged_in_screen(
 
 def simulate_action(
     image: Image.Image,
-    elements: List[UIElement],
+    elements: list[UIElement],
     plan: Any,  # Using Any to avoid circular import with core.py/LLMActionPlan
     username_for_login: str = "User",  # Default username for welcome screen
-) -> Tuple[Image.Image, List[UIElement]]:
+) -> tuple[Image.Image, list[UIElement]]:
     """
     Simulates the effect of a planned action on the synthetic UI state.
 
@@ -410,7 +411,7 @@ def draw_highlight(
     width: int = 3,
     dim_factor: float = 0.5,
     text_color: str = "black",  # Color for annotation text
-    text_bg_color: Tuple[int, int, int, int] = (
+    text_bg_color: tuple[int, int, int, int] = (
         255,
         255,
         255,

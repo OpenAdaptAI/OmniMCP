@@ -98,6 +98,7 @@ This shows elements being tracked across frames. Status 'VISIBLE' means seen thi
 * If `action_type` is 'press_key', `parameters.key_info` MUST be the key/shortcut string. `target_element_id` MUST be null.
 * If `action_type` is 'scroll', specify direction/amount in `analysis_reasoning` or `parameters` if possible. `target_element_id` MUST be null.
 * If `action_type` is 'wait', specify `parameters.wait_duration_s`. `target_element_id` MUST be null.
+* If `action_type` is 'launch_app', `parameters.app_name` MUST be provided (use standard app name, e.g., "Calculator", "Safari"). `target_element_id` MUST be null.
 * If `action_type` is 'finish', `is_goal_complete` MUST be true. `target_element_id` and `parameters` should generally be null/empty.
 * If a required element is missing (use Tracked Elements Context), choose an appropriate action like 'wait' or 'press_key' if a keyboard alternative exists, or explain the issue in `screen_analysis.reasoning` and potentially choose 'finish' with `is_goal_complete: false` if stuck. Do NOT hallucinate `target_element_id` for missing elements.
 """

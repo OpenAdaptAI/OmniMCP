@@ -292,7 +292,9 @@ class ActionDecision(BaseModel):
     analysis_reasoning: str
     """Brief summary connecting the screen analysis to the chosen action."""
 
-    action_type: Literal["click", "type", "scroll", "press_key", "wait", "finish"]
+    action_type: Literal[
+        "click", "type", "scroll", "press_key", "wait", "finish", "launch_app"
+    ]
     """The type of action to perform."""
 
     target_element_id: Optional[int] = Field(default=None)
@@ -305,6 +307,7 @@ class ActionDecision(BaseModel):
        - For 'wait': {'wait_duration_s': float}
        - For 'scroll': {'scroll_direction': 'up'/'down'/'left'/'right', 'scroll_steps': int}
        - For 'click': {'click_type': 'single'/'double'} (Optional)
+       - For 'launch_app': {'app_name': 'AppName'}
     """
 
     is_goal_complete: bool = Field(default=False)

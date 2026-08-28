@@ -5,6 +5,8 @@ import os
 import time
 from typing import Callable, List, Optional, Tuple, Protocol, Dict, Any
 import json
+import subprocess
+import platform
 
 from PIL import Image
 from loguru import logger
@@ -99,6 +101,7 @@ class AgentExecutor:
             "scroll": self._execute_scroll,
             "wait": self._execute_wait,
             "finish": self._execute_finish,
+            "launch_app": self._execute_launch_app,
         }
         # Initialize metrics and structured log storage
         self.metrics: Dict[str, List[Any]] = self._reset_metrics()
@@ -294,6 +297,64 @@ class AgentExecutor:
         )
         # The main loop checks the is_goal_complete flag from the decision.
         return True  # The action itself succeeds trivially
+
+
+    def _execute_launch_app(
+        self, decision: ActionDecision, target_element: Optional[UIElement], screen_dims: Optional[Tuple[int, int]], scaling_factor: int
+    ) -> bool:
+        """Handles the 'launch_app' action using OS-specific commands."""
+        app_name = decision.parameters.get("app_name")
+        if not app_name:
+            logger.error("Action 'launch_app' planned but 'app_name' missing in parameters.")
+            return False
+
+        logger.info(f"Attempting to launch application: {app_name}")
+        system = platform.system()
+        cmd: List[str] = []
+        shell_required = False
+
+        try:
+            if system == "Darwin": # macOS
+                cmd = ['open', '-a', app_name]
+            elif system == "Windows":
+                # Using 'start' command - might need refinement depending on exact needs
+                cmd = ['start', '', app_name]
+                shell_required = True # 'start' is a shell command
+            elif system == "Linux":
+                # Basic attempt - might need full path or 'xdg-open' depending on setup
+                # This requires the app_name to be in the system's PATH
+                # A better approach might involve desktop file parsing or 'which' command
+                logger.warning(f"Linux app launch for '{app_name}' assumes it's in PATH. May fail.")
+                cmd = [app_name.lower()] # Try lowercase executable name
+            else:
+                logger.error(f"Unsupported operating system for launch_app: {system}")
+                return False
+
+            logger.debug(f"Executing launch command: {' '.join(cmd)}")
+            # Use capture_output=True to get stdout/stderr if needed, text=True for string decoding
+            result = subprocess.run(cmd, check=True, shell=shell_required, capture_output=True, text=True, timeout=15)
+            logger.debug(f"App launch command stdout: {result.stdout}")
+            logger.debug(f"App launch command stderr: {result.stderr}")
+            logger.success(f"Successfully executed launch command for '{app_name}'.")
+            # Add a short pause to allow the application window to start opening
+            time.sleep(2.0) # Increased pause after launch
+            return True
+
+        except FileNotFoundError:
+             logger.error(f"Launch failed: Command or application '{cmd[0]}' not found for app '{app_name}'. Is it installed and in PATH (if Linux)?")
+             return False
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Launch command failed for '{app_name}' with error code {e.returncode}.")
+            logger.error(f"Stderr: {e.stderr}")
+            logger.error(f"Stdout: {e.stdout}")
+            return False
+        except subprocess.TimeoutExpired:
+             logger.error(f"Launch command timed out for '{app_name}'.")
+             return False
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during app launch for '{app_name}': {e}", exc_info=True)
+            return False
+
 
     # --- Main Execution Loop ---
 

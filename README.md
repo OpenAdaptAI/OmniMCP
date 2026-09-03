@@ -1,5 +1,13 @@
 # OmniMCP
 
+> [!IMPORTANT]
+> **Labs, not the OpenAdapt product.** This repository is a perceive-plan-act
+> computer-use experiment. It is not how OpenAdapt records, compiles, or
+> replays a workflow. The product is
+> [openadapt-flow](https://github.com/OpenAdaptAI/openadapt-flow): a compiled
+> program that reports `VERIFIED` only if an independent check agrees.
+> `pip install openadapt`.
+
 [![CI](https://github.com/OpenAdaptAI/OmniMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenAdaptAI/OmniMCP/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](https://www.python.org/)
